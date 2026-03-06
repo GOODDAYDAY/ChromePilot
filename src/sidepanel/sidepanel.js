@@ -184,7 +184,13 @@ function clearHistory() {
     const welcome = document.createElement('div');
     welcome.className = 'welcome';
     welcome.id = 'welcome';
-    welcome.innerHTML = '<div class="welcome-title">ChromePilot</div><div>Type a command to control this page.<br>For example: "click the login button"</div>';
+    const title = document.createElement('div');
+    title.className = 'welcome-title';
+    title.textContent = 'ChromePilot';
+    const desc = document.createElement('div');
+    desc.textContent = 'Type a command to control this page. For example: "click the login button"';
+    welcome.appendChild(title);
+    welcome.appendChild(desc);
     messagesEl.appendChild(welcome);
 }
 
