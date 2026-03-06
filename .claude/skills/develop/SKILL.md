@@ -283,6 +283,41 @@ This is the **only** confirmation gate in the entire workflow. Everything before
 
 ---
 
+---
+
+### Mode 5: Finalize & Sync Documents
+
+**Trigger:** `/develop done` or `/develop done <ID|slug>`
+
+During implementation, requirements often evolve — new features get added, edge cases emerge, designs change.
+This mode captures all of that back into the documents so they stay the single source of truth.
+
+#### Steps
+
+1. **Identify target**: If ID/slug is provided, use that requirement. Otherwise, find the most recent `Done` item in
+   TRACKER.md.
+2. **Diff scan**: Read the current codebase files listed in the design doc's File Plan. Compare the actual
+   implementation
+   against what the requirement doc and design doc describe. Look for:
+   - Features implemented but not listed in requirements
+   - Design changes (new files, changed interfaces, extra settings, new actions)
+   - Acceptance criteria that need adding or updating
+   - Implementation details that diverged from the original design
+3. **Update requirement doc**: Add any missing requirements discovered during implementation. Check off completed
+   acceptance criteria. Add new criteria for new features.
+4. **Update design doc**: Sync the design to match actual implementation — update file plan, detailed design sections,
+   architecture notes, risk table. Change status to `Final`.
+5. **Summary**: Print a diff summary of what was added/changed in each document.
+
+#### Rules for this mode
+
+- Do NOT change code — this mode is documents-only
+- Read actual source files to verify, don't guess from memory
+- Preserve the original document structure, just add/update sections
+- If the requirement doc already matches implementation, say so and skip
+
+---
+
 ## Rules
 
 - **Never write code before both documents are approved** — this is the core invariant
@@ -292,3 +327,4 @@ This is the **only** confirmation gate in the entire workflow. Everything before
   offer a direct fix instead
 - Keep file paths consistent between TRACKER.md references and the actual filesystem
 - When the user says `/develop status`, always use Mode 1 regardless of other arguments
+- **After marking Done, always remind the user** to run `/develop done` to sync documents with actual implementation
