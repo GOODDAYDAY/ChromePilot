@@ -17,7 +17,10 @@ $ARGUMENTS
 - **Design documents directory:** `docs/designs/`
 - **Tracker file:** `docs/TRACKER.md`
 - **Requirement numbering:** `REQ-XXX`, auto-incrementing
-- **Design doc naming:** `design-REQ-XXX.md` (mirrors the requirement it implements)
+- **File naming:** Both requirement and design docs share the same slug:
+    - Requirement: `requirement-REQ-XXX-<slug>.md` (e.g. `requirement-REQ-001-init.md`)
+    - Design: `design-REQ-XXX-<slug>.md` (e.g. `design-REQ-001-init.md`)
+    - Slug is kebab-case, derived from the user-provided name
 - **Status flow:** `Todo` → `Designing` → `Approved` → `In Progress` → `Done`
 
 ### TRACKER.md Format
@@ -27,10 +30,10 @@ $ARGUMENTS
 
 Latest ID: N
 
-| ID | Requirement | Design | Status | Updated | Notes |
-|----|-------------|--------|--------|---------|-------|
-| REQ-001 | [xxx.md](requirements/xxx.md) | [design-REQ-001.md](designs/design-REQ-001.md) | Done | 2026-03-06 | - |
-| REQ-002 | [yyy.md](requirements/yyy.md) | - | Designing | 2026-03-06 | - |
+| ID | Slug | Requirement | Design | Status | Updated | Notes |
+|----|------|-------------|--------|--------|---------|-------|
+| REQ-001 | init | [requirement-REQ-001-init.md](requirements/requirement-REQ-001-init.md) | [design-REQ-001-init.md](designs/design-REQ-001-init.md) | Done | 2026-03-06 | - |
+| REQ-002 | user-auth | [requirement-REQ-002-user-auth.md](requirements/requirement-REQ-002-user-auth.md) | - | Designing | 2026-03-06 | - |
 ```
 
 Auto-create directories and TRACKER.md if they don't exist. Always read the latest state before any operation.
@@ -76,15 +79,21 @@ Create the document-driven development scaffold:
 
 ### Mode 2: New Requirement
 
-**Trigger:** User provides a requirement document path, or describes a new feature/task.
+**Trigger:** One of:
+
+- `/develop add <slug>` — create new requirement with the given slug (kebab-case name)
+- `/develop add <slug> <description>` — slug + inline description as initial content
+- `/develop <existing-file-path>` — register an existing requirement file
 
 #### Phase 2a: Requirement Registration
 
-1. If user provided a file path → read the document
-2. If user described a feature in text → create a new `.md` file in `docs/requirements/`
-3. Check TRACKER.md:
-    - Not tracked → assign next `REQ-XXX` ID, add row with status `Todo`
-    - Already tracked → show current status and ask how to proceed
+1. Parse the slug from arguments (first word after `add`). Convert to kebab-case if needed.
+2. Assign the next `REQ-XXX` ID from TRACKER.md
+3. Create `docs/requirements/requirement-REQ-XXX-<slug>.md`:
+    - If description provided → use it as initial content
+    - If file path provided → read the existing document and rename/move to convention
+    - Otherwise → create with a placeholder heading
+4. Add row to TRACKER.md with status `Todo`
 
 #### Phase 2b: Requirement Enrichment
 
@@ -98,18 +107,15 @@ Analyze the requirement document. If it is brief or incomplete, proactively disc
 
 After discussion, update the requirement document with agreed changes.
 
-#### Phase 2c: Gate
+#### Phase 2c: Auto-proceed to Design
 
-Ask: **"Requirement is ready. Proceed to architecture design?"**
-
-- User confirms → go to Mode 3
-- User declines → stop, status stays `Todo`
+After enriching the requirement, automatically proceed to Mode 3 (no gate needed here).
 
 ---
 
 ### Mode 3: Architecture Design
 
-**Trigger:** User confirms design phase, or explicitly asks to design a requirement.
+**Trigger:** Auto-proceeds from Mode 2, or user explicitly asks to design a requirement.
 
 Update TRACKER.md status to `Designing`.
 
@@ -166,19 +172,14 @@ State your recommended approach with clear reasoning, considering:
 - Fit with existing architecture
 - Impact on existing features
 
-#### Step 4: Await User Decision
+#### Step 4: Select Best Approach
 
-**STOP. Do NOT proceed without explicit user approval of an approach.**
-
-Possible outcomes:
-
-- User picks an approach → proceed to Step 5
-- User requests changes → revise and re-present
-- User has a different idea → incorporate and redesign
+Pick the recommended approach and proceed directly to writing the design document. No user confirmation needed at this
+stage.
 
 #### Step 5: Write Technical Design Document
 
-After user confirms an approach, produce a full `design-REQ-XXX.md` in `docs/designs/` containing:
+Produce a full `design-REQ-XXX-<slug>.md` in `docs/designs/` containing:
 
 ```markdown
 # Technical Design: [Feature Name]
@@ -236,12 +237,15 @@ Status: Proposed
 
 Update TRACKER.md: add design doc link, update status to `Approved`.
 
-#### Step 6: Gate
+#### Step 6: Gate — Single Confirmation Point
 
-Present the design doc to the user. Ask: **"Design is ready. Start implementation?"**
+Present both the updated requirement doc and design doc to the user. Ask: **"Documents are ready. Start implementation?"
+**
+
+This is the **only** confirmation gate in the entire workflow. Everything before this runs automatically.
 
 - User confirms → go to Mode 4
-- User requests revisions → update the design doc and re-present
+- User requests revisions → update the relevant doc(s) and re-present
 - User declines → stop, status stays `Approved`
 
 ---
