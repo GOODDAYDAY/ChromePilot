@@ -1,0 +1,27 @@
+{
+  "name": "chromepilot",
+  "version": "1.0.0",
+  "description": "Control your browser with natural language. ChromePilot is a Chrome extension that lets you interact with any webpage using plain English — just tell it what to do, and it clicks, types, scrolls, and navigates for you",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GOODDAYDAY/ChromePilot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/GOODDAYDAY/ChromePilot/issues"
+  },
+  "homepage": "https://github.com/GOODDAYDAY/ChromePilot#readme",
+  "dependencies": {
+    "sharp": "^0.34.5"
+  }
+}
