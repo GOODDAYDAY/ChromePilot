@@ -1,47 +1,29 @@
 /**
  * ChromePilot Popup
+ * Toggles the side panel on the active tab and closes.
  */
 
-const commandInput = document.getElementById('commandInput');
-const submitBtn = document.getElementById('submitBtn');
-const resultDiv = document.getElementById('result');
+const messageEl = document.getElementById('message');
 
-function setResult(text, isError = false) {
-    resultDiv.textContent = text;
-    resultDiv.className = isError ? 'result error' : 'result success';
-}
-
-async function executeCommand() {
-    const command = commandInput.value.trim();
-    if (!command) return;
-
-    submitBtn.disabled = true;
-    setResult('Running...');
-
+async function init() {
     try {
-        const response = await chrome.runtime.sendMessage({
-            type: 'EXECUTE_COMMAND',
-            command
-        });
-
-        if (response && response.success) {
-            setResult(response.message);
-        } else {
-            setResult(response?.error || 'Unknown error occurred', true);
+        const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+        if (!tab) {
+            messageEl.textContent = 'No active tab found.';
+            return;
         }
+
+        // chrome:// and edge:// pages don't allow content scripts
+        if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('edge://') || tab.url?.startsWith('about:')) {
+            messageEl.textContent = 'Cannot run on this page.';
+            return;
+        }
+
+        await chrome.tabs.sendMessage(tab.id, {type: 'TOGGLE_PANEL'});
+        window.close();
     } catch (error) {
-        setResult(error.message, true);
-    } finally {
-        submitBtn.disabled = false;
+        messageEl.textContent = 'Reload the page and try again.';
     }
 }
 
-submitBtn.addEventListener('click', executeCommand);
-
-commandInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-        executeCommand();
-    }
-});
-
-commandInput.focus();
+init();

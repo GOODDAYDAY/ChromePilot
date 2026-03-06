@@ -12,7 +12,7 @@ body {
 }
 
 .container {
-    max-width: 480px;
+    max-width: 520px;
     margin: 40px auto;
     padding: 24px;
     background: #ffffff;
@@ -38,7 +38,8 @@ body {
     color: #374151;
 }
 
-.field input {
+.field input,
+.field select {
     width: 100%;
     padding: 8px 12px;
     border: 1px solid #d1d5db;
@@ -46,10 +47,18 @@ body {
     font-size: 14px;
     outline: none;
     transition: border-color 0.15s;
+    background: #ffffff;
 }
 
-.field input:focus {
+.field input:focus,
+.field select:focus {
     border-color: #2563eb;
+}
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
 }
 
 #saveBtn {
@@ -66,6 +75,27 @@ body {
 
 #saveBtn:hover {
     background: #1d4ed8;
+}
+
+.secondary {
+    padding: 8px 20px;
+    background: #ffffff;
+    color: #2563eb;
+    border: 1px solid #2563eb;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.secondary:hover {
+    background: #eff6ff;
+}
+
+.secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .status {

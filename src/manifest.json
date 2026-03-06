@@ -1,15 +1,19 @@
 {
   "manifest_version": 3,
   "name": "ChromePilot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Control any webpage using natural language commands.",
   "permissions": [
     "activeTab",
     "storage",
     "scripting"
   ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
-    "service_worker": "background/service-worker.js"
+    "service_worker": "background/service-worker.js",
+    "type": "module"
   },
   "content_scripts": [
     {
@@ -18,6 +22,9 @@
       ],
       "js": [
         "lib/utils.js",
+        "content/dom-extractor.js",
+        "content/action-executor.js",
+        "content/side-panel.js",
         "content/content-script.js"
       ],
       "run_at": "document_idle"

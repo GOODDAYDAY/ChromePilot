@@ -9,11 +9,47 @@
 <body>
 <div class="container">
     <h1 class="title">ChromePilot Settings</h1>
+
+    <div class="field">
+        <label for="presetSelect">Provider Preset</label>
+        <select id="presetSelect">
+            <option value="">-- Select a preset --</option>
+            <option value="claude">Claude (Anthropic)</option>
+            <option value="openai">OpenAI</option>
+            <option value="copilot">GitHub Copilot</option>
+            <option value="ollama">Ollama (Local)</option>
+            <option value="custom">Custom</option>
+        </select>
+    </div>
+
+    <div class="field">
+        <label for="providerSelect">Provider Format</label>
+        <select id="providerSelect">
+            <option value="openai">OpenAI-compatible</option>
+            <option value="anthropic">Anthropic</option>
+        </select>
+    </div>
+
+    <div class="field">
+        <label for="baseUrlInput">API Base URL</label>
+        <input id="baseUrlInput" placeholder="https://api.openai.com" type="text">
+    </div>
+
     <div class="field">
         <label for="apiKeyInput">API Key</label>
-        <input id="apiKeyInput" placeholder="Enter your API key" type="password">
+        <input id="apiKeyInput" placeholder="Enter your API key (optional for local)" type="password">
     </div>
-    <button id="saveBtn" type="button">Save</button>
+
+    <div class="field">
+        <label for="modelInput">Model</label>
+        <input id="modelInput" placeholder="e.g. gpt-4o, claude-sonnet-4-20250514, llama3" type="text">
+    </div>
+
+    <div class="button-group">
+        <button id="saveBtn" type="button">Save</button>
+        <button class="secondary" id="testBtn" type="button">Test Connection</button>
+    </div>
+
     <div class="status" id="status"></div>
 </div>
 <script src="options.js"></script>

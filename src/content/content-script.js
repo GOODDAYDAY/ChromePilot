@@ -1,33 +1,43 @@
 /**
- * ChromePilot Content Script
- * Injected into web pages, listens for action commands from the service worker.
+ * ChromePilot Content Script — Orchestrator
+ * Handles messaging between service worker and content modules.
+ * Loaded after: utils.js, dom-extractor.js, action-executor.js, side-panel.js
  */
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'PERFORM_ACTION') {
-        const result = executeAction(message.action);
-        sendResponse(result);
+    switch (message.type) {
+        case 'TOGGLE_PANEL':
+            togglePanel();
+            sendResponse({success: true});
+            break;
+
+        case 'EXTRACT_DOM': {
+            const domContext = extractInteractiveElements();
+            sendResponse({success: true, domContext});
+            break;
+        }
+
+        case 'PERFORM_ACTIONS':
+            executeActions(message.actions)
+                .then(results => sendResponse({success: true, results}))
+                .catch(error => sendResponse({success: false, error: error.message}));
+            return true;
+
+        case 'COMMAND_STATUS':
+            setStatusMessage(message.status);
+            sendResponse({success: true});
+            break;
+
+        case 'COMMAND_RESULT':
+            removeStatusMessage();
+            if (message.error) {
+                addMessage('error', message.error);
+            } else if (message.results) {
+                addMessage('ai', message.results);
+            }
+            setSendEnabled(true);
+            sendResponse({success: true});
+            break;
     }
     return true;
 });
-
-function executeAction(action) {
-    switch (action.type) {
-        case 'click':
-            console.log('[ChromePilot] Would click:', action.value);
-            return {success: true, message: `Action logged: click "${action.value}"`};
-
-        case 'type':
-            console.log('[ChromePilot] Would type:', action.value);
-            return {success: true, message: `Action logged: type "${action.value}"`};
-
-        case 'scroll':
-            console.log('[ChromePilot] Would scroll:', action.value);
-            return {success: true, message: `Action logged: scroll "${action.value}"`};
-
-        case 'log':
-        default:
-            console.log('[ChromePilot] Received command:', action.value);
-            return {success: true, message: `Command received: "${action.value}"`};
-    }
-}
