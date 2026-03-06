@@ -1,6 +1,6 @@
 /**
  * ChromePilot Service Worker
- * Orchestrates: DOM extraction → LLM call → action execution
+ * Orchestrates: DOM extraction → LLM call → action execution (multi-step loop)
  */
 
 import {callLLM} from './llm-client.js';
@@ -10,8 +10,16 @@ const DEFAULT_STORAGE = {
     llmBaseUrl: '',
     llmApiKey: '',
     llmModel: '',
-    commandHistory: []
+    openInCurrentTab: false,
+    maxSteps: 10,
+    actionDelay: 500
 };
+
+const DEFAULT_MAX_STEPS = 10;
+const STEP_DELAY_MS = 1000;
+const NAV_WAIT_MS = 3000;
+
+let taskCancelled = false;
 
 chrome.runtime.onInstalled.addListener(async (details) => {
     if (details.reason === 'install') {
@@ -24,15 +32,30 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     }
 });
 
+// Click extension icon → open side panel
+chrome.action.onClicked.addListener(async (tab) => {
+    try {
+        await chrome.sidePanel.open({windowId: tab.windowId});
+    } catch (error) {
+        console.error('[ChromePilot] Failed to open side panel:', error);
+    }
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'EXECUTE_COMMAND') {
-        handleExecuteCommand(message.command, sender.tab?.id)
+        handleExecuteCommand(message.command)
             .then(sendResponse)
             .catch((error) => {
                 console.error('[ChromePilot] EXECUTE_COMMAND error:', error);
                 sendResponse({success: false, error: error.message});
             });
         return true;
+    }
+
+    if (message.type === 'CANCEL_TASK') {
+        taskCancelled = true;
+        sendResponse({success: true});
+        return false;
     }
 
     if (message.type === 'TEST_LLM') {
@@ -45,8 +68,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 });
 
-async function getActiveTabId(senderTabId) {
-    if (senderTabId) return senderTabId;
+async function getActiveTabId() {
     const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
     if (!tab) throw new Error('No active tab found');
     return tab.id;
@@ -60,64 +82,226 @@ async function sendToTab(tabId, message) {
     }
 }
 
-async function handleExecuteCommand(command, senderTabId) {
-    const tabId = await getActiveTabId(senderTabId);
+async function sendToPanel(message) {
+    try {
+        await chrome.runtime.sendMessage(message);
+    } catch (error) {
+        // Panel may not be open — ignore
+    }
+}
 
-    // Step 1: Extract DOM
-    await sendToTab(tabId, {type: 'COMMAND_STATUS', status: 'Extracting page elements...'});
-    const domResponse = await sendToTab(tabId, {type: 'EXTRACT_DOM'});
-    if (!domResponse?.success || !domResponse.domContext) {
-        await sendToTab(tabId, {type: 'COMMAND_RESULT', error: 'Failed to extract page elements'});
-        return {success: false, error: 'Failed to extract page elements'};
+async function waitForTabLoad(tabId, timeoutMs = NAV_WAIT_MS) {
+    return new Promise((resolve) => {
+        let resolved = false;
+        const timeout = setTimeout(() => {
+            if (!resolved) {
+                resolved = true;
+                chrome.tabs.onUpdated.removeListener(listener);
+                resolve();
+            }
+        }, timeoutMs);
+
+        function listener(updatedTabId, changeInfo) {
+            if (updatedTabId === tabId && changeInfo.status === 'complete') {
+                if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timeout);
+                    chrome.tabs.onUpdated.removeListener(listener);
+                    resolve();
+                }
+            }
+        }
+
+        chrome.tabs.onUpdated.addListener(listener);
+    });
+}
+
+async function ensureContentScripts(tabId) {
+    try {
+        // Test if content script is already loaded
+        await chrome.tabs.sendMessage(tabId, {type: 'PING'});
+    } catch {
+        // Content script not loaded — inject it
+        try {
+            await chrome.scripting.executeScript({
+                target: {tabId},
+                files: [
+                    'lib/utils.js',
+                    'content/dom-extractor.js',
+                    'content/action-executor.js',
+                    'content/content-script.js'
+                ]
+            });
+            // Wait a moment for scripts to initialize
+            await delay(300);
+        } catch (error) {
+            throw new Error(`Cannot inject scripts into this page: ${error.message}`);
+        }
+    }
+}
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function handleNavigateAction(action, tabId) {
+    const config = await chrome.storage.sync.get('openInCurrentTab');
+    const openInCurrentTab = config.openInCurrentTab;
+
+    let url = action.url;
+    // Ensure URL has protocol
+    if (url && !url.match(/^https?:\/\//i)) {
+        url = 'https://' + url;
     }
 
-    // Step 2: Read LLM config
+    let newTabId = tabId;
+    if (openInCurrentTab) {
+        await chrome.tabs.update(tabId, {url});
+    } else {
+        const newTab = await chrome.tabs.create({url});
+        newTabId = newTab.id;
+        // Focus the new tab
+        await chrome.tabs.update(newTabId, {active: true});
+    }
+
+    // Wait for page to load
+    await waitForTabLoad(newTabId);
+    // Extra settle time for SPA frameworks
+    await delay(500);
+
+    return {
+        tabId: newTabId,
+        result: {
+            action: 'navigate',
+            success: true,
+            message: action.description || `Navigated to ${url}`
+        }
+    };
+}
+
+async function handleExecuteCommand(command) {
+    taskCancelled = false;
+    let tabId = await getActiveTabId();
+
     const config = await chrome.storage.sync.get(['llmProvider', 'llmBaseUrl', 'llmApiKey', 'llmModel']);
     if (!config.llmProvider || !config.llmBaseUrl) {
-        await sendToTab(tabId, {
-            type: 'COMMAND_RESULT',
-            error: 'LLM not configured. Please set up in extension options.'
-        });
+        await sendToPanel({type: 'COMMAND_RESULT', error: 'LLM not configured. Please set up in extension options.'});
         return {success: false, error: 'LLM not configured'};
     }
 
-    // Step 3: Call LLM
-    await sendToTab(tabId, {type: 'COMMAND_STATUS', status: 'Thinking...'});
-    let llmResult;
-    try {
-        llmResult = await callLLM(config, command, domResponse.domContext);
-    } catch (error) {
-        await sendToTab(tabId, {type: 'COMMAND_RESULT', error: `LLM error: ${error.message}`});
-        return {success: false, error: error.message};
+    const stepsConfig = await chrome.storage.sync.get('maxSteps');
+    const maxSteps = (stepsConfig.maxSteps !== undefined) ? stepsConfig.maxSteps : DEFAULT_MAX_STEPS;
+    // 0 means unlimited
+    const unlimited = maxSteps === 0;
+
+    const conversationHistory = [];
+
+    for (let step = 1; unlimited || step <= maxSteps; step++) {
+        if (taskCancelled) {
+            await sendToPanel({type: 'COMMAND_RESULT', error: 'Task cancelled by user.'});
+            return {success: false, error: 'Cancelled'};
+        }
+
+        // Step A: Extract DOM
+        await sendToPanel({
+            type: 'COMMAND_STATUS',
+            status: step === 1 ? 'Extracting page elements...' : `Step ${step}: Re-extracting page elements...`
+        });
+
+        await ensureContentScripts(tabId);
+        const domResponse = await sendToTab(tabId, {type: 'EXTRACT_DOM'});
+        if (!domResponse?.success || !domResponse.domContext) {
+            await sendToPanel({type: 'COMMAND_RESULT', error: 'Failed to extract page elements'});
+            return {success: false, error: 'Failed to extract page elements'};
+        }
+
+        // Step B: Call LLM
+        await sendToPanel({type: 'COMMAND_STATUS', status: step === 1 ? 'Thinking...' : `Step ${step}: Thinking...`});
+
+        let llmResult;
+        try {
+            llmResult = await callLLM(config, command, domResponse.domContext, conversationHistory);
+        } catch (error) {
+            await sendToPanel({type: 'COMMAND_RESULT', error: `LLM error: ${error.message}`});
+            return {success: false, error: error.message};
+        }
+
+        if (llmResult.error) {
+            await sendToPanel({type: 'COMMAND_RESULT', error: llmResult.error});
+            return {success: false, error: llmResult.error};
+        }
+
+        if (!llmResult.actions || llmResult.actions.length === 0) {
+            // No actions — task is done or LLM can't proceed
+            const summary = llmResult.summary || 'Task complete (no more actions).';
+            await sendToPanel({type: 'COMMAND_RESULT', summary});
+            return {success: true, summary};
+        }
+
+        // Step C: Execute actions sequentially with delay
+        await sendToPanel({
+            type: 'COMMAND_STATUS',
+            status: `Step ${step}: Executing ${llmResult.actions.length} action(s)...`
+        });
+
+        const delayConfig = await chrome.storage.sync.get('actionDelay');
+        const actionDelay = (delayConfig.actionDelay !== undefined) ? delayConfig.actionDelay : 500;
+
+        const results = [];
+        for (let i = 0; i < llmResult.actions.length; i++) {
+            if (taskCancelled) break;
+
+            const action = llmResult.actions[i];
+
+            // Delay between actions (not before the first one)
+            if (i > 0) {
+                await delay(actionDelay);
+            }
+
+            if (action.action === 'navigate') {
+                const navResult = await handleNavigateAction(action, tabId);
+                tabId = navResult.tabId;
+                results.push(navResult.result);
+            } else {
+                const execResponse = await sendToTab(tabId, {type: 'PERFORM_ACTIONS', actions: [action]});
+                if (execResponse?.success && execResponse.results) {
+                    results.push(...execResponse.results);
+                } else {
+                    results.push({
+                        action: action.action,
+                        success: false,
+                        message: execResponse?.error || 'Execution failed'
+                    });
+                }
+            }
+        }
+
+        // Record this step in conversation history
+        conversationHistory.push({
+            actions: llmResult.actions,
+            results
+        });
+
+        // Check if done
+        const isDone = llmResult.done !== false; // default to true if not specified
+        if (isDone) {
+            await sendToPanel({type: 'COMMAND_RESULT', results, summary: llmResult.summary});
+            return {success: true, results};
+        }
+
+        // Not done — show step result and continue
+        await sendToPanel({type: 'STEP_COMPLETE', step, maxSteps: unlimited ? null : maxSteps, results});
+        await delay(STEP_DELAY_MS);
     }
 
-    if (llmResult.error) {
-        await sendToTab(tabId, {type: 'COMMAND_RESULT', error: llmResult.error});
-        return {success: false, error: llmResult.error};
-    }
-
-    if (!llmResult.actions || llmResult.actions.length === 0) {
-        await sendToTab(tabId, {type: 'COMMAND_RESULT', error: 'No actions returned by LLM'});
-        return {success: false, error: 'No actions returned'};
-    }
-
-    // Step 4: Execute actions
-    await sendToTab(tabId, {type: 'COMMAND_STATUS', status: `Executing ${llmResult.actions.length} action(s)...`});
-    const execResponse = await sendToTab(tabId, {type: 'PERFORM_ACTIONS', actions: llmResult.actions});
-
-    if (!execResponse?.success) {
-        await sendToTab(tabId, {type: 'COMMAND_RESULT', error: execResponse?.error || 'Failed to execute actions'});
-        return {success: false, error: 'Failed to execute actions'};
-    }
-
-    // Step 5: Send results
-    await sendToTab(tabId, {type: 'COMMAND_RESULT', results: execResponse.results});
-    return {success: true, results: execResponse.results};
+    // Max steps reached (only possible when not unlimited)
+    await sendToPanel({type: 'COMMAND_RESULT', error: `Reached maximum of ${maxSteps} steps. Task may be incomplete.`});
+    return {success: false, error: 'Max steps reached'};
 }
 
 async function handleTestLLM(config) {
     try {
-        const result = await callLLM(config, 'Click the first button', '[1] <button>Test</button>');
+        const result = await callLLM(config, 'Click the first button', '[1] <button>Test</button>', []);
         if (result.error) {
             return {success: false, error: result.error};
         }

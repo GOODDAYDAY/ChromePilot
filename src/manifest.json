@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "ChromePilot",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Control any webpage using natural language commands.",
   "permissions": [
     "activeTab",
     "storage",
-    "scripting"
+    "scripting",
+    "sidePanel"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -24,14 +25,15 @@
         "lib/utils.js",
         "content/dom-extractor.js",
         "content/action-executor.js",
-        "content/side-panel.js",
         "content/content-script.js"
       ],
       "run_at": "document_idle"
     }
   ],
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
   "action": {
-    "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon-16.png",
       "48": "icons/icon-48.png",

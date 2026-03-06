@@ -122,6 +122,26 @@ async function executeActions(actions) {
                     });
                     break;
                 }
+                case 'read': {
+                    const el = getElementByIndex(action.index);
+                    if (!el) {
+                        results.push({
+                            index: action.index,
+                            action: 'read',
+                            success: false,
+                            message: `Element [${action.index}] not found`
+                        });
+                        break;
+                    }
+                    const text = el.textContent?.trim().replace(/\s+/g, ' ').substring(0, 500) || '';
+                    results.push({
+                        index: action.index,
+                        action: 'read',
+                        success: true,
+                        message: action.description || `Read: ${text}`
+                    });
+                    break;
+                }
                 default:
                     results.push({action: action.action, success: false, message: `Unknown action: ${action.action}`});
             }

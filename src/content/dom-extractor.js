@@ -25,9 +25,9 @@ const INTERACTIVE_SELECTORS = [
     '[contenteditable="true"]'
 ].join(', ');
 
-const MAX_ELEMENTS = 500;
-const MAX_TEXT_LENGTH = 100;
-const MAX_CLASS_LENGTH = 80;
+const MAX_ELEMENTS = 150;
+const MAX_TEXT_LENGTH = 60;
+const MAX_CLASS_LENGTH = 0; // skip class to save tokens
 
 // Stores references to extracted elements for later action execution
 const elementMap = new Map();
@@ -100,7 +100,7 @@ function formatElement(el, index, sectionContext) {
     if (el.type && (tag === 'input' || tag === 'button')) attrs.push(`type="${el.type}"`);
     if (el.placeholder) attrs.push(`placeholder="${el.placeholder}"`);
     if (el.href) attrs.push(`href="${el.getAttribute('href')}"`);
-    if (el.className && typeof el.className === 'string') {
+    if (MAX_CLASS_LENGTH > 0 && el.className && typeof el.className === 'string') {
         const cls = el.className.trim().substring(0, MAX_CLASS_LENGTH);
         if (cls) attrs.push(`class="${cls}"`);
     }

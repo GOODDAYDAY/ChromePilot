@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <link href="sidepanel.css" rel="stylesheet">
+    <title>ChromePilot</title>
+</head>
+<body>
+<div class="panel">
+    <div class="header">
+        <span class="header-title">ChromePilot</span>
+        <div class="header-actions">
+            <label class="toggle-label" title="Navigate commands open in current tab instead of new tab">
+                <input id="openInCurrentTab" type="checkbox">
+                <span class="toggle-text">当前页跳转</span>
+            </label>
+            <div class="setting-group" title="Max steps per task">
+                <select id="maxSteps">
+                    <option value="5">5 steps</option>
+                    <option selected value="10">10 steps</option>
+                    <option value="20">20 steps</option>
+                    <option value="50">50 steps</option>
+                    <option value="0">Unlimited</option>
+                </select>
+            </div>
+            <div class="setting-group" title="Delay between actions (ms)">
+                <select id="actionDelay">
+                    <option value="0">0s</option>
+                    <option value="100">0.1s</option>
+                    <option value="200">0.2s</option>
+                    <option selected value="500">0.5s</option>
+                    <option value="1000">1s</option>
+                    <option value="2000">2s</option>
+                    <option value="3000">3s</option>
+                    <option value="5000">5s</option>
+                </select>
+            </div>
+            <button class="header-btn" id="clearBtn" title="Clear history">&#128465;</button>
+        </div>
+    </div>
+    <div class="messages" id="messages">
+        <div class="welcome" id="welcome">
+            <div class="welcome-title">ChromePilot</div>
+            <div>Type a command to control this page.<br>For example: "click the login button"</div>
+        </div>
+    </div>
+    <div class="input-area">
+        <input autocomplete="off" class="chat-input" id="chatInput" placeholder="Type a command..." type="text">
+        <button class="send-btn" id="sendBtn">Send</button>
+        <button class="stop-btn hidden" id="stopBtn">Stop</button>
+    </div>
+</div>
+<script src="sidepanel.js"></script>
+</body>
+</html>
