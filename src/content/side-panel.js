@@ -1,6 +1,7 @@
 /**
  * ChromePilot Side Panel
  * Chat UI injected into pages via Shadow DOM.
+ * Opens by pushing page content to the left (not overlaying).
  */
 
 const PANEL_WIDTH = 380;
@@ -20,26 +21,32 @@ const PANEL_CSS = `
     right: 0;
     width: ${PANEL_WIDTH}px;
     height: 100vh;
-    background: #ffffff;
-    border-left: 1px solid #e5e7eb;
+    background: #f9fafb;
+    border-left: 1px solid #d1d5db;
     display: flex;
     flex-direction: column;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-size: 14px;
     color: #1a1a1a;
     z-index: 2147483647;
-    box-shadow: -2px 0 12px rgba(0, 0, 0, 0.1);
-    transition: transform 0.25s ease;
-}
-.panel.hidden {
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.08);
     transform: translateX(100%);
+    transition: transform 0.3s ease;
+}
+.panel.visible {
+    transform: translateX(0);
+}
+@media (max-width: 600px) {
+    .panel {
+        width: 80vw;
+    }
 }
 .header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
-    background: #2563eb;
+    padding: 10px 16px;
+    background: #374151;
     color: #ffffff;
     flex-shrink: 0;
 }
@@ -47,29 +54,49 @@ const PANEL_CSS = `
     font-size: 15px;
     font-weight: 600;
 }
-.close-btn {
+.header-actions {
+    display: flex;
+    gap: 4px;
+}
+.header-btn {
     background: none;
     border: none;
     color: #ffffff;
-    font-size: 18px;
+    font-size: 16px;
     cursor: pointer;
     padding: 4px 8px;
     border-radius: 4px;
     line-height: 1;
 }
-.close-btn:hover {
-    background: rgba(255,255,255,0.2);
+.header-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+.header-btn[title]:hover::after {
+    content: attr(title);
 }
 .messages {
     flex: 1;
     overflow-y: auto;
-    padding: 12px 16px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
+.welcome {
+    text-align: center;
+    color: #9ca3af;
+    font-size: 13px;
+    margin-top: 40px;
+    line-height: 1.6;
+}
+.welcome-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #6b7280;
+    margin-bottom: 8px;
+}
 .message {
-    padding: 10px 12px;
+    padding: 10px 14px;
     border-radius: 8px;
     line-height: 1.5;
     word-break: break-word;
@@ -77,16 +104,17 @@ const PANEL_CSS = `
     max-width: 90%;
 }
 .message.user {
-    background: #eff6ff;
+    background: #dbeafe;
     color: #1e40af;
     align-self: flex-end;
     border-bottom-right-radius: 2px;
 }
 .message.ai {
-    background: #f3f4f6;
+    background: #ffffff;
     color: #1f2937;
     align-self: flex-start;
     border-bottom-left-radius: 2px;
+    border: 1px solid #e5e7eb;
 }
 .message.status {
     background: #fefce8;
@@ -99,6 +127,7 @@ const PANEL_CSS = `
     background: #fef2f2;
     color: #991b1b;
     align-self: flex-start;
+    border: 1px solid #fecaca;
 }
 .action-result {
     margin-top: 4px;
@@ -116,7 +145,7 @@ const PANEL_CSS = `
     gap: 8px;
     padding: 12px 16px;
     border-top: 1px solid #e5e7eb;
-    background: #f9fafb;
+    background: #ffffff;
     flex-shrink: 0;
 }
 .chat-input {
@@ -127,9 +156,11 @@ const PANEL_CSS = `
     font-size: 14px;
     outline: none;
     font-family: inherit;
+    background: #ffffff;
 }
 .chat-input:focus {
     border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 .send-btn {
     padding: 8px 16px;
@@ -157,7 +188,45 @@ let messagesEl = null;
 let inputEl = null;
 let sendBtnEl = null;
 let statusMsgEl = null;
+let welcomeEl = null;
 let panelVisible = false;
+
+function getPanelWidth() {
+    if (window.innerWidth <= 600) {
+        return Math.floor(window.innerWidth * 0.8);
+    }
+    return PANEL_WIDTH;
+}
+
+function pushPageContent(push) {
+    const width = getPanelWidth();
+    document.documentElement.style.transition = 'margin-right 0.3s ease';
+    document.documentElement.style.marginRight = push ? `${width}px` : '';
+    document.documentElement.style.overflow = push ? 'auto' : '';
+}
+
+function showWelcome() {
+    if (!messagesEl) return;
+    // Remove existing welcome if any
+    hideWelcome();
+    welcomeEl = document.createElement('div');
+    welcomeEl.className = 'welcome';
+    const title = document.createElement('div');
+    title.className = 'welcome-title';
+    title.textContent = 'ChromePilot';
+    const desc = document.createElement('div');
+    desc.textContent = 'Type a command to control this page.\nFor example: "click the login button"';
+    welcomeEl.appendChild(title);
+    welcomeEl.appendChild(desc);
+    messagesEl.appendChild(welcomeEl);
+}
+
+function hideWelcome() {
+    if (welcomeEl && welcomeEl.parentNode) {
+        welcomeEl.parentNode.removeChild(welcomeEl);
+        welcomeEl = null;
+    }
+}
 
 function createSidePanel() {
     if (panelRoot) return;
@@ -171,20 +240,34 @@ function createSidePanel() {
     shadowRoot.appendChild(style);
 
     panelEl = document.createElement('div');
-    panelEl.className = 'panel hidden';
+    panelEl.className = 'panel';
 
     // Header
     const header = document.createElement('div');
     header.className = 'header';
-    const title = document.createElement('span');
-    title.className = 'header-title';
-    title.textContent = 'ChromePilot';
+    const headerTitle = document.createElement('span');
+    headerTitle.className = 'header-title';
+    headerTitle.textContent = 'ChromePilot';
+
+    const headerActions = document.createElement('div');
+    headerActions.className = 'header-actions';
+
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'header-btn';
+    clearBtn.textContent = '\u{1F5D1}';
+    clearBtn.title = 'Clear history';
+    clearBtn.addEventListener('click', clearHistory);
+
     const closeBtn = document.createElement('button');
-    closeBtn.className = 'close-btn';
+    closeBtn.className = 'header-btn';
     closeBtn.textContent = '\u2715';
+    closeBtn.title = 'Close';
     closeBtn.addEventListener('click', () => togglePanel(false));
-    header.appendChild(title);
-    header.appendChild(closeBtn);
+
+    headerActions.appendChild(clearBtn);
+    headerActions.appendChild(closeBtn);
+    header.appendChild(headerTitle);
+    header.appendChild(headerActions);
 
     // Messages
     messagesEl = document.createElement('div');
@@ -198,14 +281,28 @@ function createSidePanel() {
     inputEl.type = 'text';
     inputEl.placeholder = 'Type a command...';
     inputEl.autocomplete = 'off';
+
+    // Prevent Vim plugin and other extensions from capturing keystrokes
+    // 1) Stop propagation so events don't escape shadow DOM
+    inputEl.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') handleSend();
+    });
+    inputEl.addEventListener('keyup', (e) => e.stopPropagation());
+    inputEl.addEventListener('keypress', (e) => e.stopPropagation());
+    // 2) Mark host as contentEditable while input is focused so Vim plugins
+    //    see document.activeElement.isContentEditable === true and back off
+    inputEl.addEventListener('focus', () => {
+        panelRoot.contentEditable = 'true';
+    });
+    inputEl.addEventListener('blur', () => {
+        panelRoot.contentEditable = 'false';
+    });
+
     sendBtnEl = document.createElement('button');
     sendBtnEl.className = 'send-btn';
     sendBtnEl.textContent = 'Send';
-
     sendBtnEl.addEventListener('click', handleSend);
-    inputEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') handleSend();
-    });
 
     inputArea.appendChild(inputEl);
     inputArea.appendChild(sendBtnEl);
@@ -215,6 +312,8 @@ function createSidePanel() {
     panelEl.appendChild(inputArea);
     shadowRoot.appendChild(panelEl);
     document.body.appendChild(panelRoot);
+
+    showWelcome();
 }
 
 function togglePanel(forceState) {
@@ -225,22 +324,32 @@ function togglePanel(forceState) {
         panelVisible = !panelVisible;
     }
     if (panelVisible) {
-        panelEl.classList.remove('hidden');
+        panelEl.classList.add('visible');
+        pushPageContent(true);
         inputEl.focus();
     } else {
-        panelEl.classList.add('hidden');
+        panelEl.classList.remove('visible');
+        pushPageContent(false);
     }
+}
+
+function clearHistory() {
+    if (!messagesEl) return;
+    messagesEl.textContent = '';
+    statusMsgEl = null;
+    showWelcome();
 }
 
 function addMessage(role, content) {
     createSidePanel();
+    hideWelcome();
+
     const msg = document.createElement('div');
     msg.className = `message ${role}`;
 
     if (typeof content === 'string') {
         msg.textContent = content;
     } else if (Array.isArray(content)) {
-        // Action results array
         for (const result of content) {
             const line = document.createElement('div');
             line.className = `action-result ${result.success ? 'success' : 'fail'}`;
@@ -252,7 +361,6 @@ function addMessage(role, content) {
     messagesEl.appendChild(msg);
     messagesEl.scrollTop = messagesEl.scrollHeight;
 
-    // Clear status message reference when adding a real message
     if (role !== 'status') {
         statusMsgEl = null;
     }
@@ -262,6 +370,7 @@ function addMessage(role, content) {
 
 function setStatusMessage(text) {
     createSidePanel();
+    hideWelcome();
     if (statusMsgEl) {
         statusMsgEl.textContent = text;
     } else {
