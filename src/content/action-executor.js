@@ -142,6 +142,32 @@ async function executeActions(actions) {
                     });
                     break;
                 }
+                case 'repeat': {
+                    const el = getElementByIndex(action.index);
+                    if (!el) {
+                        results.push({
+                            index: action.index,
+                            action: 'repeat',
+                            success: false,
+                            message: `Element [${action.index}] not found`
+                        });
+                        break;
+                    }
+                    const times = action.times || 1;
+                    for (let r = 0; r < times; r++) {
+                        simulateClick(el);
+                        if (r < times - 1) {
+                            await delay(action.delay || 300);
+                        }
+                    }
+                    results.push({
+                        index: action.index,
+                        action: 'repeat',
+                        success: true,
+                        message: action.description || `Clicked element [${action.index}] ${times} times`
+                    });
+                    break;
+                }
                 default:
                     results.push({action: action.action, success: false, message: `Unknown action: ${action.action}`});
             }

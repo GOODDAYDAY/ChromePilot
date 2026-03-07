@@ -12,9 +12,36 @@ const testBtn = document.getElementById('testBtn');
 const statusDiv = document.getElementById('status');
 
 const PRESETS = {
+    // Paid
     claude: {provider: 'anthropic', baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-4-20250514'},
     openai: {provider: 'openai', baseUrl: 'https://api.openai.com', model: 'gpt-4o'},
     copilot: {provider: 'openai', baseUrl: 'https://models.github.ai/inference', model: 'openai/gpt-4o'},
+    'copilot-mini': {provider: 'openai', baseUrl: 'https://models.github.ai/inference', model: 'openai/gpt-4o-mini'},
+    'copilot-llama': {
+        provider: 'openai',
+        baseUrl: 'https://models.github.ai/inference',
+        model: 'meta-llama/Meta-Llama-3.1-70B-Instruct'
+    },
+    'copilot-mistral': {
+        provider: 'openai',
+        baseUrl: 'https://models.github.ai/inference',
+        model: 'mistral-ai/Mistral-Small'
+    },
+    // Free
+    groq: {provider: 'openai', baseUrl: 'https://api.groq.com/openai', model: 'llama-3.3-70b-versatile'},
+    together: {
+        provider: 'openai',
+        baseUrl: 'https://api.together.xyz',
+        model: 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo'
+    },
+    openrouter: {
+        provider: 'openai',
+        baseUrl: 'https://openrouter.ai/api',
+        model: 'meta-llama/llama-3.3-70b-instruct:free'
+    },
+    cerebras: {provider: 'openai', baseUrl: 'https://api.cerebras.ai', model: 'llama-3.3-70b'},
+    siliconflow: {provider: 'openai', baseUrl: 'https://api.siliconflow.cn', model: 'Qwen/Qwen2.5-7B-Instruct'},
+    // Local
     ollama: {provider: 'openai', baseUrl: 'http://localhost:11434', model: 'llama3'},
     custom: {provider: 'openai', baseUrl: '', model: ''}
 };

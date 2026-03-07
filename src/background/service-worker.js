@@ -263,6 +263,10 @@ async function handleExecuteCommand(command) {
                 tabId = navResult.tabId;
                 results.push(navResult.result);
             } else {
+                // Pass actionDelay to repeat actions so they use the configured interval
+                if (action.action === 'repeat' && !action.delay) {
+                    action.delay = actionDelay;
+                }
                 const execResponse = await sendToTab(tabId, {type: 'PERFORM_ACTIONS', actions: [action]});
                 if (execResponse?.success && execResponse.results) {
                     results.push(...execResponse.results);

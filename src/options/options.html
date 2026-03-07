@@ -14,10 +14,24 @@
         <label for="presetSelect">Provider Preset</label>
         <select id="presetSelect">
             <option value="">-- Select a preset --</option>
-            <option value="claude">Claude (Anthropic)</option>
-            <option value="openai">OpenAI</option>
-            <option value="copilot">GitHub Copilot</option>
-            <option value="ollama">Ollama (Local)</option>
+            <optgroup label="Paid">
+                <option value="claude">Claude (Anthropic)</option>
+                <option value="openai">OpenAI</option>
+                <option value="copilot">GitHub Copilot (GPT-4o)</option>
+                <option value="copilot-mini">GitHub Copilot (GPT-4o-mini)</option>
+                <option value="copilot-llama">GitHub Copilot (Llama 3.1 70B)</option>
+                <option value="copilot-mistral">GitHub Copilot (Mistral Small)</option>
+            </optgroup>
+            <optgroup label="Free">
+                <option value="groq">Groq (Free)</option>
+                <option value="together">Together AI (Free tier)</option>
+                <option value="openrouter">OpenRouter (Free models)</option>
+                <option value="cerebras">Cerebras (Free)</option>
+                <option value="siliconflow">SiliconFlow 硅基流动 (Free)</option>
+            </optgroup>
+            <optgroup label="Local">
+                <option value="ollama">Ollama (Local)</option>
+            </optgroup>
             <option value="custom">Custom</option>
         </select>
     </div>

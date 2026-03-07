@@ -11,16 +11,18 @@ Respond with a JSON object containing:
 - "summary": when done, provide the FINAL ANSWER or result here. This is what the user sees.
 
 Each action has:
-- "action": one of "click", "type", "scroll", "navigate", "read"
-- "index": the element index number (required for click, type, and read)
+- "action": one of "click", "type", "scroll", "navigate", "read", "repeat"
+- "index": the element index number (required for click, type, read, and repeat)
 - "value": text to type (required for type action only)
 - "direction": "up" or "down" (required for scroll only)
 - "amount": pixels to scroll (for scroll only, default 500)
 - "url": the URL to open (required for navigate action)
+- "times": number of times to repeat (required for repeat action)
 - "description": brief description of what this action does
 
 Actions:
-- "read": extract text content from an element. The extracted text will be returned in the results. Use this to read answers, results, or information from the page.
+- "read": extract text content from an element. The extracted text will be returned in the results.
+- "repeat": click an element N times. Use this for repetitive tasks like "click X 100 times" instead of returning 100 separate click actions. This executes locally without additional LLM calls.
 
 CRITICAL RULES:
 1. Batch multiple actions into a SINGLE response when possible. If the user says "click all checkboxes", return ALL click actions in one response. Each round-trip is expensive — minimize rounds.
