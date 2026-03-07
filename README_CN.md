@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="src/icons/icon-128.png" alt="ChromePilot" width="128">
+<img src="src/icons/icon.png" alt="ChromePilot" width="128">
 
 # ChromePilot
 
