@@ -48,6 +48,18 @@
 
 ![跨页导航演示](docs/images/3.%20go%20to%20google%20translator%20and%20translat%20what%20is%20superpise%20to%20chinese.gif)
 
+### 跨站自动化 — 导航到其他网站并操作
+
+> 命令：*"go to my github homepage and star the repository ChromePilot"*
+
+![跨站自动化演示](docs/images/4.%20go%20to%20my%20github%20homepage%20and%20star%20the%20repository%20ChromePilot.gif)
+
+### 调试模式 — 可视化检测到的元素
+
+> 点击 👁 按钮查看页面上所有被检测到的交互元素及其编号。
+
+![调试模式演示](docs/images/5.%20click%20button%2054.gif)
+
 ## 安装步骤
 
 1. 克隆仓库：

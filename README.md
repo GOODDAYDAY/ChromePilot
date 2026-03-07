@@ -51,6 +51,18 @@ want in plain English or Chinese.
 
 ![Cross-page navigation demo](docs/images/3.%20go%20to%20google%20translator%20and%20translat%20what%20is%20superpise%20to%20chinese.gif)
 
+### Cross-site Automation — Navigate & Interact
+
+> Command: *"go to my github homepage and star the repository ChromePilot"*
+
+![Cross-site automation demo](docs/images/4.%20go%20to%20my%20github%20homepage%20and%20star%20the%20repository%20ChromePilot.gif)
+
+### Debug Overlay — Inspect Detected Elements
+
+> Use the 👁 button to visualize all detected interactive elements with their index numbers.
+
+![Debug overlay demo](docs/images/5.%20click%20button%2054.gif)
+
 ## Installation
 
 1. Clone the repository:
