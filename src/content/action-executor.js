@@ -67,7 +67,14 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+let actionCancelled = false;
+
+function cancelActions() {
+    actionCancelled = true;
+}
+
 async function executeActions(actions) {
+    actionCancelled = false;
     const results = [];
 
     for (const action of actions) {
@@ -155,6 +162,7 @@ async function executeActions(actions) {
                     }
                     const times = action.times || 1;
                     for (let r = 0; r < times; r++) {
+                        if (actionCancelled) break;
                         simulateClick(el);
                         if (r < times - 1) {
                             await delay(action.delay || 300);

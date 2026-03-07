@@ -9,6 +9,8 @@ const inputEl = document.getElementById('chatInput');
 const sendBtn = document.getElementById('sendBtn');
 const stopBtn = document.getElementById('stopBtn');
 const clearBtn = document.getElementById('clearBtn');
+const showElementsBtn = document.getElementById('showElementsBtn');
+const copyDomBtn = document.getElementById('copyDomBtn');
 const openInCurrentTabEl = document.getElementById('openInCurrentTab');
 const maxStepsEl = document.getElementById('maxSteps');
 const actionDelayEl = document.getElementById('actionDelay');
@@ -58,11 +60,41 @@ async function init() {
 
     // Input handlers
     inputEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') handleSend();
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+        }
     });
+    inputEl.addEventListener('input', autoResizeInput);
     sendBtn.addEventListener('click', handleSend);
     stopBtn.addEventListener('click', handleStop);
     clearBtn.addEventListener('click', clearHistory);
+
+    // Show Elements toggle
+    showElementsBtn.addEventListener('click', async () => {
+        try {
+            const response = await chrome.runtime.sendMessage({type: 'TOGGLE_DEBUG_OVERLAY'});
+            showElementsBtn.classList.toggle('active', response?.active);
+        } catch (e) {
+            console.error('[ChromePilot] Failed to toggle debug overlay:', e);
+        }
+    });
+
+    // Copy DOM to clipboard
+    copyDomBtn.addEventListener('click', async () => {
+        try {
+            const response = await chrome.runtime.sendMessage({type: 'COPY_DOM'});
+            if (response?.success) {
+                await navigator.clipboard.writeText(response.domContext);
+                copyDomBtn.textContent = '\u2705';
+                setTimeout(() => {
+                    copyDomBtn.textContent = '\uD83D\uDCCB';
+                }, 1500);
+            }
+        } catch (e) {
+            console.error('[ChromePilot] Failed to copy DOM:', e);
+        }
+    });
 
     // Listen for messages from service worker
     chrome.runtime.onMessage.addListener((message) => {
@@ -196,12 +228,18 @@ function clearHistory() {
 
 // --- Actions ---
 
+function autoResizeInput() {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+}
+
 async function handleSend() {
     const text = inputEl.value.trim();
     if (!text || running) return;
 
     addMessage('user', text);
     inputEl.value = '';
+    inputEl.style.height = 'auto';
     setRunning(true);
 
     try {

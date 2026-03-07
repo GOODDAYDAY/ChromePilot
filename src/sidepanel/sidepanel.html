@@ -35,6 +35,8 @@
                     <option value="5000">5s</option>
                 </select>
             </div>
+            <button class="header-btn" id="showElementsBtn" title="Show detected elements">&#128065;</button>
+            <button class="header-btn" id="copyDomBtn" title="Copy detected elements to clipboard">&#128203;</button>
             <button class="header-btn" id="clearBtn" title="Clear history">&#128465;</button>
         </div>
     </div>
@@ -45,7 +47,8 @@
         </div>
     </div>
     <div class="input-area">
-        <input autocomplete="off" class="chat-input" id="chatInput" placeholder="Type a command..." type="text">
+        <textarea autocomplete="off" class="chat-input" id="chatInput" placeholder="Type a command..."
+                  rows="1"></textarea>
         <button class="send-btn" id="sendBtn">Send</button>
         <button class="stop-btn hidden" id="stopBtn">Stop</button>
     </div>

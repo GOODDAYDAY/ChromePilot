@@ -93,6 +93,10 @@ body {
     background: rgba(255, 255, 255, 0.15);
 }
 
+.header-btn.active {
+    background: rgba(37, 99, 235, 0.5);
+}
+
 .messages {
     flex: 1;
     overflow-y: auto;
@@ -196,6 +200,11 @@ body {
     outline: none;
     font-family: inherit;
     background: #ffffff;
+    resize: none;
+    min-height: 36px;
+    max-height: 120px;
+    overflow-y: auto;
+    line-height: 1.4;
 }
 
 .chat-input:focus {

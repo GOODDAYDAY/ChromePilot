@@ -12,7 +12,8 @@ const DEFAULT_STORAGE = {
     llmModel: '',
     openInCurrentTab: false,
     maxSteps: 10,
-    actionDelay: 500
+    actionDelay: 500,
+    maxElements: 150
 };
 
 const DEFAULT_MAX_STEPS = 10;
@@ -20,6 +21,7 @@ const STEP_DELAY_MS = 1000;
 const NAV_WAIT_MS = 3000;
 
 let taskCancelled = false;
+let currentAbortController = null;
 
 chrome.runtime.onInstalled.addListener(async (details) => {
     if (details.reason === 'install') {
@@ -54,8 +56,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (message.type === 'CANCEL_TASK') {
         taskCancelled = true;
+        if (currentAbortController) {
+            currentAbortController.abort();
+            currentAbortController = null;
+        }
+        // Cancel running actions in content script
+        getActiveTabId().then(tabId => {
+            chrome.tabs.sendMessage(tabId, {type: 'CANCEL_ACTIONS'}).catch(() => {
+            });
+        }).catch(() => {
+        });
         sendResponse({success: true});
         return false;
+    }
+
+    if (message.type === 'COPY_DOM') {
+        getActiveTabId().then(tabId => {
+            ensureContentScripts(tabId).then(() => {
+                chrome.tabs.sendMessage(tabId, {type: 'EXTRACT_DOM'}, (response) => {
+                    sendResponse(response || {success: false});
+                });
+            }).catch(e => sendResponse({success: false, error: e.message}));
+        }).catch(e => sendResponse({success: false, error: e.message}));
+        return true;
+    }
+
+    if (message.type === 'TOGGLE_DEBUG_OVERLAY') {
+        getActiveTabId().then(tabId => {
+            ensureContentScripts(tabId).then(() => {
+                chrome.tabs.sendMessage(tabId, {type: 'TOGGLE_DEBUG_OVERLAY'}, (response) => {
+                    sendResponse(response || {success: false});
+                });
+            }).catch(e => sendResponse({success: false, error: e.message}));
+        }).catch(e => sendResponse({success: false, error: e.message}));
+        return true;
     }
 
     if (message.type === 'TEST_LLM') {
@@ -181,6 +215,8 @@ async function handleNavigateAction(action, tabId) {
 
 async function handleExecuteCommand(command) {
     taskCancelled = false;
+    currentAbortController = new AbortController();
+    const signal = currentAbortController.signal;
     let tabId = await getActiveTabId();
 
     const config = await chrome.storage.sync.get(['llmProvider', 'llmBaseUrl', 'llmApiKey', 'llmModel']);
@@ -209,7 +245,9 @@ async function handleExecuteCommand(command) {
         });
 
         await ensureContentScripts(tabId);
-        const domResponse = await sendToTab(tabId, {type: 'EXTRACT_DOM'});
+        const elemConfig = await chrome.storage.sync.get('maxElements');
+        const maxElements = elemConfig.maxElements || 150;
+        const domResponse = await sendToTab(tabId, {type: 'EXTRACT_DOM', maxElements});
         if (!domResponse?.success || !domResponse.domContext) {
             await sendToPanel({type: 'COMMAND_RESULT', error: 'Failed to extract page elements'});
             return {success: false, error: 'Failed to extract page elements'};
@@ -220,8 +258,12 @@ async function handleExecuteCommand(command) {
 
         let llmResult;
         try {
-            llmResult = await callLLM(config, command, domResponse.domContext, conversationHistory);
+            llmResult = await callLLM(config, command, domResponse.domContext, conversationHistory, signal);
         } catch (error) {
+            if (error.name === 'AbortError' || taskCancelled) {
+                await sendToPanel({type: 'COMMAND_RESULT', error: 'Task cancelled by user.'});
+                return {success: false, error: 'Cancelled'};
+            }
             await sendToPanel({type: 'COMMAND_RESULT', error: `LLM error: ${error.message}`});
             return {success: false, error: error.message};
         }
@@ -289,6 +331,7 @@ async function handleExecuteCommand(command) {
         // Check if done
         const isDone = llmResult.done !== false; // default to true if not specified
         if (isDone) {
+            currentAbortController = null;
             await sendToPanel({type: 'COMMAND_RESULT', results, summary: llmResult.summary});
             return {success: true, results};
         }
@@ -299,6 +342,7 @@ async function handleExecuteCommand(command) {
     }
 
     // Max steps reached (only possible when not unlimited)
+    currentAbortController = null;
     await sendToPanel({type: 'COMMAND_RESULT', error: `Reached maximum of ${maxSteps} steps. Task may be incomplete.`});
     return {success: false, error: 'Max steps reached'};
 }

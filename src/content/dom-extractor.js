@@ -20,12 +20,12 @@ const INTERACTIVE_SELECTORS = [
     '[role="option"]',
     '[role="treeitem"]',
     '[onclick]',
-    '[tabindex]',
+    '[tabindex="0"]',
     '[data-action]',
     '[contenteditable="true"]'
 ].join(', ');
 
-const MAX_ELEMENTS = 150;
+const DEFAULT_MAX_ELEMENTS = 150;
 const MAX_TEXT_LENGTH = 60;
 const MAX_CLASS_LENGTH = 0; // skip class to save tokens
 
@@ -49,9 +49,32 @@ function isElementVisible(el) {
 }
 
 function hasClickListener(el) {
-    // Check for cursor pointer style (common indicator of clickable elements)
     const style = getComputedStyle(el);
     if (style.cursor === 'pointer') return true;
+    return false;
+}
+
+function isNoiseElement(el) {
+    const tag = el.tagName.toLowerCase();
+    // SVG elements are almost always icons — skip
+    if (tag === 'svg') return true;
+    // For div/span: skip if no text, no aria-label, no id, no role
+    if (tag === 'div' || tag === 'span') {
+        const hasText = el.textContent?.trim().length > 0;
+        const hasLabel = el.getAttribute('aria-label');
+        const hasId = el.id;
+        const hasRole = el.getAttribute('role');
+        if (!hasText && !hasLabel && !hasId && !hasRole) return true;
+    }
+    return false;
+}
+
+function hasInteractiveAncestor(el, interactiveSet) {
+    let parent = el.parentElement;
+    while (parent) {
+        if (interactiveSet.has(parent)) return true;
+        parent = parent.parentElement;
+    }
     return false;
 }
 
@@ -133,16 +156,17 @@ function formatElement(el, index, sectionContext) {
     return line;
 }
 
-function extractInteractiveElements() {
+function extractInteractiveElements(maxElements) {
+    maxElements = maxElements || DEFAULT_MAX_ELEMENTS;
     elementMap.clear();
 
     // Phase 1: standard interactive selectors
     const selectorElements = new Set(document.querySelectorAll(INTERACTIVE_SELECTORS));
 
     // Phase 2: find cursor:pointer elements (framework-rendered clickable divs/spans)
-    const allElements = document.querySelectorAll('div, span, li, label, svg, img, td');
+    const allElements = document.querySelectorAll('div, span, li, label, img, td');
     for (const el of allElements) {
-        if (selectorElements.size + selectorElements.size > 2000) break;
+        if (selectorElements.size > 2000) break;
         if (hasClickListener(el)) {
             // Avoid adding a parent if we already have its interactive child
             const hasInteractiveChild = el.querySelector(INTERACTIVE_SELECTORS);
@@ -152,11 +176,28 @@ function extractInteractiveElements() {
         }
     }
 
+    // Phase 3: filter out noise and deduplicate parent/child
+    // First, identify primary interactive elements (selectors with role/aria/native)
+    const primarySet = new Set();
+    for (const el of selectorElements) {
+        if (!isNoiseElement(el)) {
+            primarySet.add(el);
+        }
+    }
+
+    // Remove child elements whose ancestor is already interactive
+    const dedupedSet = new Set();
+    for (const el of primarySet) {
+        if (!hasInteractiveAncestor(el, primarySet)) {
+            dedupedSet.add(el);
+        }
+    }
+
     const results = [];
     let index = 1;
 
     // Sort by DOM order
-    const sorted = Array.from(selectorElements).sort((a, b) => {
+    const sorted = Array.from(dedupedSet).sort((a, b) => {
         const pos = a.compareDocumentPosition(b);
         return pos & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
     });
@@ -165,7 +206,7 @@ function extractInteractiveElements() {
     const contextCache = new Map();
 
     for (const el of sorted) {
-        if (index > MAX_ELEMENTS) break;
+        if (index > maxElements) break;
         if (el.closest('#chromepilot-root')) continue;
         if (!isElementVisible(el)) continue;
 
@@ -189,4 +230,67 @@ function extractInteractiveElements() {
 
 function getElementByIndex(index) {
     return elementMap.get(index) || null;
+}
+
+// --- Debug Overlay ---
+
+let debugRafId = null;
+let debugScrollHandler = null;
+
+function renderOverlayItems(container) {
+    container.textContent = '';
+    for (const [index, el] of elementMap) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) continue;
+
+        const box = document.createElement('div');
+        box.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;border:2px solid rgba(37,99,235,0.6);background:rgba(37,99,235,0.08);pointer-events:none;`;
+        container.appendChild(box);
+
+        const label = document.createElement('div');
+        label.style.cssText = `position:fixed;left:${rect.left}px;top:${Math.max(0, rect.top - 18)}px;background:#2563eb;color:#fff;font-size:11px;font-weight:bold;padding:1px 4px;border-radius:3px;pointer-events:none;font-family:monospace;line-height:14px;`;
+        label.textContent = `[${index}]`;
+        container.appendChild(label);
+    }
+}
+
+function showDebugOverlay() {
+    removeDebugOverlay();
+    extractInteractiveElements(); // refresh elementMap
+
+    const container = document.createElement('div');
+    container.id = 'chromepilot-debug-overlay';
+    container.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647;pointer-events:none;';
+    renderOverlayItems(container);
+    document.body.appendChild(container);
+
+    // Track scroll/resize to update positions
+    debugScrollHandler = () => {
+        if (debugRafId) return;
+        debugRafId = requestAnimationFrame(() => {
+            debugRafId = null;
+            const c = document.getElementById('chromepilot-debug-overlay');
+            if (c) renderOverlayItems(c);
+        });
+    };
+    window.addEventListener('scroll', debugScrollHandler, true);
+    window.addEventListener('resize', debugScrollHandler);
+}
+
+function removeDebugOverlay() {
+    const existing = document.getElementById('chromepilot-debug-overlay');
+    if (existing) existing.remove();
+    if (debugScrollHandler) {
+        window.removeEventListener('scroll', debugScrollHandler, true);
+        window.removeEventListener('resize', debugScrollHandler);
+        debugScrollHandler = null;
+    }
+    if (debugRafId) {
+        cancelAnimationFrame(debugRafId);
+        debugRafId = null;
+    }
+}
+
+function isDebugOverlayActive() {
+    return !!document.getElementById('chromepilot-debug-overlay');
 }

@@ -11,7 +11,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             break;
 
         case 'EXTRACT_DOM': {
-            const domContext = extractInteractiveElements();
+            const domContext = extractInteractiveElements(message.maxElements);
             sendResponse({success: true, domContext});
             break;
         }
@@ -21,6 +21,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 .then(results => sendResponse({success: true, results}))
                 .catch(error => sendResponse({success: false, error: error.message}));
             return true;
+
+        case 'TOGGLE_DEBUG_OVERLAY':
+            if (isDebugOverlayActive()) {
+                removeDebugOverlay();
+                sendResponse({success: true, active: false});
+            } else {
+                showDebugOverlay();
+                sendResponse({success: true, active: true});
+            }
+            break;
+
+        case 'CANCEL_ACTIONS':
+            cancelActions();
+            removeDebugOverlay();
+            sendResponse({success: true});
+            break;
     }
     return true;
 });

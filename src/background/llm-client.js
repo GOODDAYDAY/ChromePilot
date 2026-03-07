@@ -98,7 +98,7 @@ function buildMessages(command, domContext, history) {
     return messages;
 }
 
-async function callAnthropic(config, command, domContext, history) {
+async function callAnthropic(config, command, domContext, history, signal) {
     const url = `${config.llmBaseUrl}/v1/messages`;
     const messages = buildMessages(command, domContext, history);
 
@@ -114,7 +114,8 @@ async function callAnthropic(config, command, domContext, history) {
             max_tokens: 4096,
             system: SYSTEM_PROMPT,
             messages
-        })
+        }),
+        signal
     });
 
     if (!response.ok) {
@@ -126,7 +127,7 @@ async function callAnthropic(config, command, domContext, history) {
     return data.content[0].text;
 }
 
-async function callOpenAICompatible(config, command, domContext, history) {
+async function callOpenAICompatible(config, command, domContext, history, signal) {
     const url = `${config.llmBaseUrl}/v1/chat/completions`;
     const headers = {'Content-Type': 'application/json'};
     if (config.llmApiKey) {
@@ -145,7 +146,8 @@ async function callOpenAICompatible(config, command, domContext, history) {
                 {role: 'system', content: SYSTEM_PROMPT},
                 ...userMessages
             ]
-        })
+        }),
+        signal
     });
 
     if (!response.ok) {
@@ -163,12 +165,12 @@ async function callOpenAICompatible(config, command, domContext, history) {
     return text;
 }
 
-export async function callLLM(config, command, domContext, history = []) {
+export async function callLLM(config, command, domContext, history = [], signal) {
     if (config.llmProvider === 'anthropic') {
-        const text = await callAnthropic(config, command, domContext, history);
+        const text = await callAnthropic(config, command, domContext, history, signal);
         return parseActionResponse(text);
     }
-    const text = await callOpenAICompatible(config, command, domContext, history);
+    const text = await callOpenAICompatible(config, command, domContext, history, signal);
     return parseActionResponse(text);
 }
 

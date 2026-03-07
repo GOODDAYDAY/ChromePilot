@@ -7,6 +7,7 @@ const providerSelect = document.getElementById('providerSelect');
 const baseUrlInput = document.getElementById('baseUrlInput');
 const apiKeyInput = document.getElementById('apiKeyInput');
 const modelInput = document.getElementById('modelInput');
+const maxElementsInput = document.getElementById('maxElementsInput');
 const saveBtn = document.getElementById('saveBtn');
 const testBtn = document.getElementById('testBtn');
 const statusDiv = document.getElementById('status');
@@ -56,11 +57,12 @@ presetSelect.addEventListener('change', () => {
 
 async function loadSettings() {
     try {
-        const data = await chrome.storage.sync.get(['llmProvider', 'llmBaseUrl', 'llmApiKey', 'llmModel']);
+        const data = await chrome.storage.sync.get(['llmProvider', 'llmBaseUrl', 'llmApiKey', 'llmModel', 'maxElements']);
         if (data.llmProvider) providerSelect.value = data.llmProvider;
         if (data.llmBaseUrl) baseUrlInput.value = data.llmBaseUrl;
         if (data.llmApiKey) apiKeyInput.value = data.llmApiKey;
         if (data.llmModel) modelInput.value = data.llmModel;
+        if (data.maxElements) maxElementsInput.value = data.maxElements;
 
         // Try to match a preset
         for (const [key, preset] of Object.entries(PRESETS)) {
@@ -79,7 +81,8 @@ async function saveSettings() {
         llmProvider: providerSelect.value,
         llmBaseUrl: baseUrlInput.value.trim().replace(/\/$/, ''),
         llmApiKey: apiKeyInput.value.trim(),
-        llmModel: modelInput.value.trim()
+        llmModel: modelInput.value.trim(),
+        maxElements: Math.max(50, Math.min(500, parseInt(maxElementsInput.value, 10) || 150))
     };
 
     if (!config.llmBaseUrl) {
