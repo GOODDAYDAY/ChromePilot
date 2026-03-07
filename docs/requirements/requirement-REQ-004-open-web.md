@@ -46,10 +46,29 @@ result extraction.
 2. DOM 上下文超过 12000 字符时自动截断
 3. 对话历史仅保留最近 3 轮
 
+### F. 重复操作 (Repeat Action)
+
+1. 新增 `repeat` action 类型：`{"action": "repeat", "index": N, "times": 1000}`
+2. 在 content script 本地循环执行，不需要每次回 LLM，避免重复性任务触发 API 限流（429）
+3. 每次点击间隔使用用户配置的 actionDelay
+
+### G. 多 Provider 预设 (Provider Presets)
+
+1. Options 页面 Provider Preset 分组显示：Paid / Free / Local
+2. 付费：Claude、OpenAI、GitHub Copilot（GPT-4o / GPT-4o-mini / Llama 3.1 70B / Mistral Small）
+3. 免费：Groq、Together AI、OpenRouter、Cerebras、SiliconFlow 硅基流动
+4. 本地：Ollama
+5. 自定义：Custom
+
+### H. 侧边栏 UI 精简
+
+1. 移除 header 中的 "ChromePilot" 标题，节省空间
+2. "当前页跳转" 改为 "Same tab"，简短明了
+
 ## Acceptance Criteria
 
 - [x] 用户说 "打开百度" → 在新标签页打开 baidu.com
-- [x] "当前页跳转" 开关状态持久化
+- [x] "Same tab" 开关状态持久化
 - [x] 切换标签页后侧边栏依然存在，聊天记录保留
 - [x] 点击扩展图标可以打开/关闭侧边栏
 - [x] 多步执行过程中显示进度状态（Step N / Max）
@@ -59,3 +78,6 @@ result extraction.
 - [x] 翻译/查询任务完成后 LLM 自动停止并返回结果
 - [x] `read` action 可提取页面元素文本
 - [x] 大页面不会触发 token 超限错误
+- [x] `repeat` action 本地执行重复点击，不触发 API 限流
+- [x] Provider 预设分组显示，包含多个免费选项
+- [x] 侧边栏 header 精简，无多余标题
