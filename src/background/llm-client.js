@@ -31,8 +31,9 @@ CRITICAL RULES:
 4. The "summary" field is shown directly to the user. For lookup tasks, include the actual result (e.g. "翻译结果: surprise"). For action tasks, summarize what was done.
 
 For navigate: use full URLs. For common sites use their real URLs (e.g. "百度" → "https://www.baidu.com", "YouTube" → "https://www.youtube.com").
+IMPORTANT: The context includes the current page URL. If the user's task requires a DIFFERENT website (e.g. "go to GitHub and star X", "search on Google for Y"), you MUST use the "navigate" action first to go there, then set "done": false so you can interact with the new page in the next step.
 
-If the user's command cannot be fulfilled with the available elements, respond with:
+If the user's command cannot be fulfilled with the available elements AND does not require navigation, respond with:
 {"actions": [], "done": true, "error": "explanation of why"}
 
 Do NOT think or reason. Respond ONLY with the JSON object, no markdown, no other text, no reasoning.`;

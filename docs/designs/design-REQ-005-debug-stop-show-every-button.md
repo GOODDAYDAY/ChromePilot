@@ -11,7 +11,8 @@ Four improvements to ChromePilot's usability:
 - **A. Debug Overlay**: Visualize detected DOM elements with numbered labels matching LLM indexes
 - **B. True Stop**: Abort in-flight fetch requests and running repeat loops immediately
 - **C. DOM Extractor Noise Reduction**: Filter out decorative/duplicate elements to maximize 150-element budget
-- **D. Auto-resize Input**: Replace `<input>` with auto-growing `<textarea>`
+- **D. Page Context Awareness**: Include current URL/title in LLM context, auto-navigate for cross-site tasks
+- **E. Auto-resize Input**: Replace `<input>` with auto-growing `<textarea>`
 
 ### Approach Evaluation
 
@@ -249,9 +250,12 @@ broad `[tabindex]` selector.
     - SVG elements: always skip (icons, never meaningful to LLM)
     - div/span with no text AND no `aria-label` AND no `id` AND no `role` → skip
 
-2. **`hasInteractiveAncestor(el, primarySet)`** — parent-child dedup:
+2. **`hasInteractiveAncestor(el, primarySet)`** — smart parent-child dedup:
     - If an element's ancestor is already in the interactive set, skip the child
-    - Example: `<div role="button">` parent + its inner empty `<div>` + inner `<svg>` = previously 3 slots, now 1
+   - **Exception**: native interactive elements (`a[href]`, `button`, `input`, `textarea`, `select`) are NEVER removed —
+     they are always meaningful
+   - Habitica: `<div role="button">` → inner empty `<div>` → inner `<svg>` = 3→1 (noise removed)
+   - GitHub: container div → child `<button>Star</button>`, `<button>Fork</button>` = all kept (real buttons preserved)
 
 3. **Selector tightening**:
     - `[tabindex]` → `[tabindex="0"]` — only explicitly focusable elements, not `tabindex="-1"` (programmatic focus)
@@ -276,7 +280,26 @@ Phase 5: sort by DOM order, limit to MAX_ELEMENTS, check visibility
   `navigator.clipboard.writeText()`
 - Brief visual feedback: icon changes to ✅ for 1.5s after copy
 
-### 3.5 Auto-resize Input (sidepanel.html + sidepanel.css + sidepanel.js)
+### 3.6 Page Context Awareness (dom-extractor.js + llm-client.js)
+
+**dom-extractor.js**: `extractInteractiveElements()` output now includes a header with current page info:
+
+```
+Page: ChromePilot - GitHub
+URL: https://github.com/GOODDAYDAY/ChromePilot
+
+[1] <a href="/">...</a>
+...
+```
+
+**llm-client.js**: System prompt updated with rule:
+> "The context includes the current page URL. If the user's task requires a DIFFERENT website, you MUST use the navigate
+> action first, then set done: false so you can interact with the new page in the next step."
+
+This solves the problem where users say "go to GitHub and star X" but the LLM doesn't realize it needs to navigate
+first.
+
+### 3.7 Auto-resize Input (sidepanel.html + sidepanel.css + sidepanel.js)
 
 **sidepanel.html** — replace `<input>` with `<textarea>`:
 
@@ -330,13 +353,13 @@ After send, reset height: `inputEl.style.height = 'auto';`
 
 | Action | Path                               | Description                                                                                                                                                                           |
 |--------|------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Modify | `src/content/dom-extractor.js`     | Add debug overlay with scroll tracking, noise filter, parent-child dedup, configurable maxElements param                                                                              |
+| Modify | `src/content/dom-extractor.js`     | Add debug overlay with scroll tracking, noise filter, smart parent-child dedup (native elements exempt), configurable maxElements, page URL/title header                              |
 | Modify | `src/content/action-executor.js`   | Add `actionCancelled` flag, `cancelActions()` function, check flag in repeat loop                                                                                                     |
 | Modify | `src/content/content-script.js`    | Add `TOGGLE_DEBUG_OVERLAY` and `CANCEL_ACTIONS` message handlers                                                                                                                      |
 | Modify | `src/background/service-worker.js` | Add `AbortController`, pass signal to `callLLM`, forward `CANCEL_ACTIONS` on stop, route `TOGGLE_DEBUG_OVERLAY` and `COPY_DOM`, read maxElements from storage and pass to EXTRACT_DOM |
 | Modify | `src/options/options.html`         | Add Max Elements input field                                                                                                                                                          |
 | Modify | `src/options/options.js`           | Load/save `maxElements` setting                                                                                                                                                       |
-| Modify | `src/background/llm-client.js`     | Accept `signal` param, pass to `fetch()` calls                                                                                                                                        |
+| Modify | `src/background/llm-client.js`     | Accept `signal` param, pass to `fetch()` calls, add cross-site navigate rule to system prompt                                                                                         |
 | Modify | `src/sidepanel/sidepanel.html`     | Add Show Elements button, Copy DOM button, change `<input>` to `<textarea>`                                                                                                           |
 | Modify | `src/sidepanel/sidepanel.js`       | Add overlay toggle handler, Copy DOM handler, auto-resize logic, update keydown for Shift+Enter                                                                                       |
 | Modify | `src/sidepanel/sidepanel.css`      | Update `.chat-input` for textarea, add `.header-btn.active` style                                                                                                                     |
@@ -381,3 +404,5 @@ After send, reset height: `inputEl.style.height = 'auto';`
 - [ ] Debug overlay labels follow elements on scroll/resize
 - [ ] Options page has Max Elements input, saved to storage and used by extractor
 - [ ] Copy DOM button copies element list to clipboard with visual feedback
+- [ ] Native interactive elements (button, a, input) not removed by ancestor dedup (GitHub Star/Fork test)
+- [ ] LLM sees current page URL in context, auto-navigates for cross-site tasks

@@ -186,9 +186,11 @@ function extractInteractiveElements(maxElements) {
     }
 
     // Remove child elements whose ancestor is already interactive
+    // BUT: native interactive elements (button, a, input, textarea, select) are never removed
+    const NATIVE_INTERACTIVE = 'a[href], button, input, textarea, select';
     const dedupedSet = new Set();
     for (const el of primarySet) {
-        if (!hasInteractiveAncestor(el, primarySet)) {
+        if (el.matches(NATIVE_INTERACTIVE) || !hasInteractiveAncestor(el, primarySet)) {
             dedupedSet.add(el);
         }
     }
@@ -225,7 +227,8 @@ function extractInteractiveElements(maxElements) {
         index++;
     }
 
-    return results.join('\n');
+    const header = `Page: ${document.title}\nURL: ${location.href}\n\n`;
+    return header + results.join('\n');
 }
 
 function getElementByIndex(index) {

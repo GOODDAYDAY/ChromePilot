@@ -2,7 +2,7 @@
 
 ## Summary
 
-Three improvements: visual debug overlay for DOM extractor, reliable task cancellation, and auto-resizing input field.
+多项改进：可视化调试、真正的任务取消、DOM 检测降噪与智能去重、页面上下文感知、自适应输入框。
 
 ## Requirements
 
@@ -28,12 +28,18 @@ Three improvements: visual debug overlay for DOM extractor, reliable task cancel
 
 1. 过滤 SVG 元素（几乎都是图标，对 LLM 无意义）
 2. 过滤空 div/span（无文本、无 aria-label、无 id、无 role 的装饰性元素）
-3. 父子去重：子元素的祖先已是可交互元素时，跳过子元素
+3. 智能父子去重：子元素的祖先已是可交互元素时，跳过子元素；但原生交互元素（button, a, input, textarea,
+   select）永远保留，不被祖先去重。解决了"GitHub Star/Fork 等按钮被父容器吞掉"与"Habitica 噪音子元素堆积"之间的平衡
 4. `[tabindex]` 收紧为 `[tabindex="0"]`，不再捕获 `tabindex="-1"` 的装饰元素
 5. 侧边栏增加 "Copy DOM" 按钮，一键复制检测到的元素列表到剪贴板，方便调试
 6. MAX_ELEMENTS 上限可在 Options 页面配置（输入框），默认 150
 
-### D. 输入框自适应高度 (Auto-resize Input)
+### D. 页面上下文感知 (Page Context Awareness)
+
+1. DOM 上下文中包含当前页面的 URL 和标题，LLM 能感知当前在哪个网站
+2. 系统提示词增加规则：如果任务需要的网站与当前页面不同，必须先用 navigate 跳转，然后 done: false 等待下一步操作
+
+### E. 输入框自适应高度 (Auto-resize Input)
 
 1. 输入框改为 `<textarea>`，支持多行输入
 2. 随内容自动增高，最小 1 行，最大不超过 5 行（约 120px）
@@ -53,3 +59,5 @@ Three improvements: visual debug overlay for DOM extractor, reliable task cancel
 - [ ] Copy DOM 按钮可将检测到的元素列表复制到剪贴板
 - [ ] 滚动页面时 Debug Overlay 标签跟随元素实时移动
 - [ ] Options 页面可配置最大元素数量，输入后保存生效
+- [ ] GitHub 等页面的原生按钮（Star, Fork 等）不被父容器去重吞掉
+- [ ] LLM 能感知当前页面 URL，跨站任务自动先 navigate 再操作
