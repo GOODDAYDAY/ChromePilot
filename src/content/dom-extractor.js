@@ -29,6 +29,14 @@ const DEFAULT_MAX_ELEMENTS = 150;
 const MAX_TEXT_LENGTH = 60;
 const MAX_CLASS_LENGTH = 0; // skip class to save tokens
 
+// Selectors for detecting active dialog/modal containers
+const DIALOG_SELECTORS = [
+    'dialog[open]',
+    '[role="dialog"]',
+    '[role="alertdialog"]',
+    '[aria-modal="true"]'
+].join(', ');
+
 // Stores references to extracted elements for later action execution
 const elementMap = new Map();
 
@@ -156,10 +164,111 @@ function formatElement(el, index, sectionContext) {
     return line;
 }
 
-function extractInteractiveElements(maxElements) {
-    maxElements = maxElements || DEFAULT_MAX_ELEMENTS;
-    elementMap.clear();
+/**
+ * Detect active dialog/modal containers on the page.
+ * Checks native <dialog>, ARIA roles, and common CSS patterns (fixed/absolute + high z-index).
+ */
+function findActiveDialogs() {
+    const dialogs = [];
 
+    // Native and ARIA dialogs
+    for (const el of document.querySelectorAll(DIALOG_SELECTORS)) {
+        if (isElementVisible(el)) dialogs.push(el);
+    }
+
+    // Heuristic: fixed/absolute overlays with high z-index that look like modals
+    // Only if we haven't found any ARIA/native dialogs already
+    if (dialogs.length === 0) {
+        const candidates = document.querySelectorAll('div, section, aside');
+        for (const el of candidates) {
+            const style = getComputedStyle(el);
+            const pos = style.position;
+            if (pos !== 'fixed' && pos !== 'absolute') continue;
+            const z = parseInt(style.zIndex, 10);
+            if (isNaN(z) || z < 100) continue;
+            const rect = el.getBoundingClientRect();
+            // Must be reasonably sized (not a tiny tooltip) but not the full page backdrop
+            if (rect.width < 100 || rect.height < 80) continue;
+            if (rect.width >= window.innerWidth && rect.height >= window.innerHeight) continue;
+            // Must contain interactive elements to be considered a dialog
+            if (!el.querySelector(INTERACTIVE_SELECTORS)) continue;
+            dialogs.push(el);
+        }
+    }
+
+    return dialogs;
+}
+
+/**
+ * Relaxed element collection for dialog containers.
+ * Dialogs are small, so we scan ALL child elements and include any that are
+ * visible and have meaningful content (text, aria-label, or input-like).
+ * This catches framework buttons that lack role/tabindex/onclick attributes.
+ */
+function collectDialogElements(dialogs) {
+    const elements = new Set();
+    // Tags worth inspecting — skip svg, script, style, br, hr, etc.
+    const CANDIDATE_TAGS = new Set([
+        'button', 'a', 'input', 'textarea', 'select', 'img',
+        'span', 'div', 'li', 'label', 'td', 'th', 'p',
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6'
+    ]);
+    const NATIVE_INTERACTIVE = new Set(['button', 'a', 'input', 'textarea', 'select']);
+    // Tags that are purely structural / decorative noise
+    const SKIP_TAGS = new Set(['svg', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'g', 'use', 'defs', 'clippath', 'mask', 'style', 'script', 'noscript', 'br', 'hr', 'wbr']);
+
+    for (const dialog of dialogs) {
+        const all = dialog.querySelectorAll('*');
+        for (const el of all) {
+            const tag = el.tagName.toLowerCase();
+            if (SKIP_TAGS.has(tag)) continue;
+            if (!CANDIDATE_TAGS.has(tag)) continue;
+            if (el.closest('#chromepilot-root')) continue;
+            if (!isElementVisible(el)) continue;
+
+            // Native interactive elements — always include
+            if (NATIVE_INTERACTIVE.has(tag)) {
+                elements.add(el);
+                continue;
+            }
+
+            // For other elements: must have direct text or meaningful attribute
+            const ariaLabel = el.getAttribute('aria-label');
+            const role = el.getAttribute('role');
+            let directText = '';
+            for (const node of el.childNodes) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    directText += node.textContent;
+                }
+            }
+            directText = directText.trim();
+
+            // Filter: no text, no label, no role → skip (pure layout wrapper)
+            if (!directText && !ariaLabel && !role) continue;
+
+            // Filter: text is only whitespace/punctuation (decorators like "—", "|", "·")
+            if (directText && !ariaLabel && !role) {
+                const cleaned = directText.replace(/[\s\-—|·•\/\\:;,.'"""''()[\]{}<>!?@#$%^&*_+=~`]+/g, '');
+                if (cleaned.length === 0) continue;
+            }
+
+            // Prefer leaf nodes: skip if a child element carries the same text
+            const hasChildCapture = Array.from(el.children).some(child => {
+                const childTag = child.tagName.toLowerCase();
+                if (NATIVE_INTERACTIVE.has(childTag)) return true;
+                if (!CANDIDATE_TAGS.has(childTag)) return false;
+                const childText = child.textContent?.trim();
+                return childText && childText === el.textContent?.trim();
+            });
+            if (hasChildCapture) continue;
+
+            elements.add(el);
+        }
+    }
+    return elements;
+}
+
+function collectCandidateElements() {
     // Phase 1: standard interactive selectors
     const selectorElements = new Set(document.querySelectorAll(INTERACTIVE_SELECTORS));
 
@@ -168,7 +277,6 @@ function extractInteractiveElements(maxElements) {
     for (const el of allElements) {
         if (selectorElements.size > 2000) break;
         if (hasClickListener(el)) {
-            // Avoid adding a parent if we already have its interactive child
             const hasInteractiveChild = el.querySelector(INTERACTIVE_SELECTORS);
             if (!hasInteractiveChild) {
                 selectorElements.add(el);
@@ -177,7 +285,6 @@ function extractInteractiveElements(maxElements) {
     }
 
     // Phase 3: filter out noise and deduplicate parent/child
-    // First, identify primary interactive elements (selectors with role/aria/native)
     const primarySet = new Set();
     for (const el of selectorElements) {
         if (!isNoiseElement(el)) {
@@ -185,8 +292,6 @@ function extractInteractiveElements(maxElements) {
         }
     }
 
-    // Remove child elements whose ancestor is already interactive
-    // BUT: native interactive elements (button, a, input, textarea, select) are never removed
     const NATIVE_INTERACTIVE = 'a[href], button, input, textarea, select';
     const dedupedSet = new Set();
     for (const el of primarySet) {
@@ -195,40 +300,109 @@ function extractInteractiveElements(maxElements) {
         }
     }
 
-    const results = [];
-    let index = 1;
+    return dedupedSet;
+}
 
-    // Sort by DOM order
-    const sorted = Array.from(dedupedSet).sort((a, b) => {
+function sortByDomOrder(elements) {
+    return Array.from(elements).sort((a, b) => {
         const pos = a.compareDocumentPosition(b);
         return pos & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
     });
+}
 
-    // Track sections for context
-    const contextCache = new Map();
-
+function appendElements(sorted, results, index, limit, contextCache, dialogLabel) {
     for (const el of sorted) {
-        if (index > maxElements) break;
+        if (index > limit) break;
         if (el.closest('#chromepilot-root')) continue;
         if (!isElementVisible(el)) continue;
 
-        // Get section context (cached per parent section)
-        let sectionContext = '';
-        const parentKey = el.parentElement;
-        if (contextCache.has(parentKey)) {
-            sectionContext = contextCache.get(parentKey);
-        } else {
-            sectionContext = getElementContext(el);
-            contextCache.set(parentKey, sectionContext);
+        let sectionContext = dialogLabel || '';
+        if (!sectionContext) {
+            const parentKey = el.parentElement;
+            if (contextCache.has(parentKey)) {
+                sectionContext = contextCache.get(parentKey);
+            } else {
+                sectionContext = getElementContext(el);
+                contextCache.set(parentKey, sectionContext);
+            }
         }
 
         elementMap.set(index, el);
         results.push(formatElement(el, index, sectionContext));
         index++;
     }
+    return index;
+}
 
-    const header = `Page: ${document.title}\nURL: ${location.href}\n\n`;
+function extractInteractiveElements(maxElements) {
+    maxElements = maxElements || DEFAULT_MAX_ELEMENTS;
+    elementMap.clear();
+
+    const allCandidates = collectCandidateElements();
+    const activeDialogs = findActiveDialogs();
+    const contextCache = new Map();
+    const results = [];
+    let index = 1;
+
+    if (activeDialogs.length > 0) {
+        // Collect dialog elements with relaxed filtering — dialogs are small,
+        // so we grab ALL visible elements with text/label, not just interactive ones.
+        // This catches framework-rendered buttons that lack ARIA/role attributes.
+        const dialogElements = collectDialogElements(activeDialogs);
+        const pageElements = new Set();
+
+        for (const el of allCandidates) {
+            // Skip elements already captured from dialogs
+            if (dialogElements.has(el)) continue;
+            const inDialog = activeDialogs.some(d => d.contains(el));
+            if (!inDialog) {
+                pageElements.add(el);
+            }
+        }
+
+        // Dialog elements first — no cap, dialogs are small, feed everything
+        const dialogLabel = activeDialogs.length === 1
+            ? `dialog: ${getDialogTitle(activeDialogs[0])}`
+            : '';
+        const sortedDialog = sortByDomOrder(dialogElements);
+        const dialogCount = sortedDialog.length;
+        index = appendElements(sortedDialog, results, index, index + dialogCount, contextCache, dialogLabel);
+
+        // Then page elements — still capped at maxElements for the page portion
+        const sortedPage = sortByDomOrder(pageElements);
+        index = appendElements(sortedPage, results, index, index + maxElements - 1, contextCache, '');
+    } else {
+        // No dialog — normal extraction
+        const sorted = sortByDomOrder(allCandidates);
+        index = appendElements(sorted, results, index, maxElements, contextCache, '');
+    }
+
+    let header = `Page: ${document.title}\nURL: ${location.href}\n`;
+    if (activeDialogs.length > 0) {
+        header += `⚠ Active dialog detected — dialog elements listed first.\n`;
+    }
+    header += '\n';
     return header + results.join('\n');
+}
+
+/**
+ * Extract a human-readable title from a dialog container.
+ */
+function getDialogTitle(dialog) {
+    const heading = dialog.querySelector('h1, h2, h3, h4, h5, h6, [class*="title"], [class*="header"]');
+    if (heading) {
+        const text = heading.textContent?.trim().replace(/\s+/g, ' ').substring(0, 40);
+        if (text) return text;
+    }
+    const label = dialog.getAttribute('aria-label') || dialog.getAttribute('aria-labelledby');
+    if (label) {
+        if (dialog.getAttribute('aria-labelledby')) {
+            const labelEl = document.getElementById(label);
+            if (labelEl) return labelEl.textContent?.trim().substring(0, 40) || '';
+        }
+        return label.substring(0, 40);
+    }
+    return '';
 }
 
 function getElementByIndex(index) {

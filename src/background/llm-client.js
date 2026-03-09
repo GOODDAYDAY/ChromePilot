@@ -29,6 +29,7 @@ CRITICAL RULES:
 2. Only set "done": false when the page needs to reload/change before you can continue (navigation, form submission, new content loading).
 3. When the task is to LOOK UP, TRANSLATE, SEARCH, or QUERY information: once the answer is visible in the page elements, STOP immediately. Set "done": true and put the answer in "summary". Do NOT perform extra unnecessary actions like copying, scrolling, or clicking after the result is already visible.
 4. The "summary" field is shown directly to the user. For lookup tasks, include the actual result (e.g. "翻译结果: surprise"). For action tasks, summarize what was done.
+5. When the element list header says "⚠ Active dialog detected", a popup/modal is open. Dialog elements are listed FIRST. You should prioritize interacting with dialog elements unless the user's command clearly targets the background page.
 
 For navigate: use full URLs. For common sites use their real URLs (e.g. "百度" → "https://www.baidu.com", "YouTube" → "https://www.youtube.com").
 IMPORTANT: The context includes the current page URL. If the user's task requires a DIFFERENT website (e.g. "go to GitHub and star X", "search on Google for Y"), you MUST use the "navigate" action first to go there, then set "done": false so you can interact with the new page in the next step.
