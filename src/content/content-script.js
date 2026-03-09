@@ -37,6 +37,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             removeDebugOverlay();
             sendResponse({success: true});
             break;
+
+        case 'START_RECORDING':
+            sendResponse(startRecording());
+            break;
+
+        case 'STOP_RECORDING':
+            sendResponse(stopRecording());
+            break;
+
+        case 'IS_RECORDING':
+            sendResponse({success: true, recording: isCurrentlyRecording()});
+            break;
     }
     return true;
 });

@@ -24,6 +24,7 @@
       "js": [
         "lib/utils.js",
         "content/dom-extractor.js",
+        "content/action-recorder.js",
         "content/action-executor.js",
         "content/content-script.js"
       ],

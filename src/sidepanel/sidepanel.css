@@ -22,23 +22,26 @@ body {
 
 .header {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 16px;
+    flex-direction: column;
+    padding: 8px 16px;
+    gap: 6px;
     background: #374151;
     color: #ffffff;
     flex-shrink: 0;
 }
 
-.header-title {
-    font-size: 15px;
-    font-weight: 600;
-}
-
-.header-actions {
+.header-row {
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+.header-icons {
+    justify-content: center;
+}
+
+.header-options {
+    justify-content: center;
 }
 
 .toggle-label {
@@ -245,6 +248,217 @@ body {
 
 .stop-btn:hover {
     background: #b91c1c;
+}
+
+/* --- Teach Mode --- */
+
+.header-btn.recording {
+    background: rgba(220, 38, 38, 0.6);
+    animation: recording-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes recording-pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.header-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.message.recording {
+    background: #fef2f2;
+    color: #991b1b;
+    align-self: flex-start;
+    font-size: 12px;
+    padding: 6px 10px;
+    border: 1px solid #fecaca;
+}
+
+.recording-summary {
+    max-width: 100%;
+}
+
+.recording-actions-list {
+    font-size: 12px;
+    color: #374151;
+    margin-bottom: 8px;
+}
+
+.recording-action-item {
+    padding: 2px 0;
+}
+
+.recording-name-row {
+    margin-bottom: 8px;
+}
+
+.recording-name-input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 13px;
+    outline: none;
+}
+
+.recording-name-input:focus {
+    border-color: #2563eb;
+}
+
+.recording-btn-row {
+    display: flex;
+    gap: 6px;
+}
+
+.recording-action-btn {
+    padding: 4px 10px;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.recording-action-btn.save {
+    background: #2563eb;
+    color: #fff;
+}
+
+.recording-action-btn.save:hover {
+    background: #1d4ed8;
+}
+
+.recording-action-btn.copy {
+    background: #e5e7eb;
+    color: #374151;
+}
+
+.recording-action-btn.copy:hover {
+    background: #d1d5db;
+}
+
+.recording-action-btn.discard {
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+.recording-action-btn.discard:hover {
+    background: #fecaca;
+}
+
+/* --- Recordings Panel --- */
+
+.recordings-panel {
+    position: absolute;
+    top: 50px;
+    left: 0;
+    right: 0;
+    max-height: 60vh;
+    background: #ffffff;
+    border-bottom: 1px solid #e5e7eb;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+    overflow-y: auto;
+}
+
+.recordings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+
+.recordings-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.recordings-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: #6b7280;
+    padding: 0 4px;
+}
+
+.recordings-empty {
+    padding: 20px;
+    text-align: center;
+    color: #9ca3af;
+    font-size: 13px;
+}
+
+.recording-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 14px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.recording-item:hover {
+    background: #f9fafb;
+}
+
+.recording-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.recording-item-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #1f2937;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.recording-item-meta {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-top: 2px;
+}
+
+.recording-item-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.rec-btn {
+    padding: 3px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    background: #fff;
+    font-size: 11px;
+    cursor: pointer;
+    color: #374151;
+}
+
+.rec-btn:hover {
+    background: #f3f4f6;
+}
+
+.rec-btn.use {
+    color: #2563eb;
+    border-color: #93c5fd;
+}
+
+.rec-btn.delete {
+    color: #dc2626;
+    border-color: #fca5a5;
 }
 
 .hidden {

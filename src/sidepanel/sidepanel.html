@@ -9,7 +9,14 @@
 <body>
 <div class="panel">
     <div class="header">
-        <div class="header-actions">
+        <div class="header-row header-icons">
+            <button class="header-btn" id="showElementsBtn" title="Show detected elements">&#128065;</button>
+            <button class="header-btn" id="copyDomBtn" title="Copy detected elements to clipboard">&#128203;</button>
+            <button class="header-btn" id="teachBtn" title="Teach mode: record your actions">&#127891;</button>
+            <button class="header-btn" id="recordingsBtn" title="Saved recordings">&#9660;</button>
+            <button class="header-btn" id="clearBtn" title="Clear history">&#128465;</button>
+        </div>
+        <div class="header-row header-options">
             <label class="toggle-label" title="Open links in same tab">
                 <input id="openInCurrentTab" type="checkbox">
                 <span class="toggle-text">Same tab</span>
@@ -35,9 +42,6 @@
                     <option value="5000">5s</option>
                 </select>
             </div>
-            <button class="header-btn" id="showElementsBtn" title="Show detected elements">&#128065;</button>
-            <button class="header-btn" id="copyDomBtn" title="Copy detected elements to clipboard">&#128203;</button>
-            <button class="header-btn" id="clearBtn" title="Clear history">&#128465;</button>
         </div>
     </div>
     <div class="messages" id="messages">
@@ -45,6 +49,13 @@
             <div class="welcome-title">ChromePilot</div>
             <div>Type a command to control this page.<br>For example: "click the login button"</div>
         </div>
+    </div>
+    <div class="recordings-panel hidden" id="recordingsPanel">
+        <div class="recordings-header">
+            <span class="recordings-title">Saved Recordings</span>
+            <button class="recordings-close" id="closeRecordingsBtn">&times;</button>
+        </div>
+        <div class="recordings-list" id="recordingsList"></div>
     </div>
     <div class="input-area">
         <textarea autocomplete="off" class="chat-input" id="chatInput" placeholder="Type a command..."

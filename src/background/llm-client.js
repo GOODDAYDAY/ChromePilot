@@ -46,22 +46,68 @@ function truncateContext(domContext) {
     return domContext.substring(0, MAX_CONTEXT_CHARS) + '\n... (truncated)';
 }
 
-function buildMessages(command, domContext, history) {
+function formatDemonstration(demonstration) {
+    if (!demonstration || !demonstration.actions || demonstration.actions.length === 0) {
+        return '';
+    }
+
+    const lines = ['The user provided a demonstration of the correct workflow:'];
+
+    demonstration.actions.forEach((a, i) => {
+        const num = i + 1;
+        switch (a.action) {
+            case 'click': {
+                const el = a.element || {};
+                const desc = el.text || el.ariaLabel || el.id || el.tag || 'element';
+                const tag = el.tag ? ` ${el.tag}` : '';
+                const ctx = el.context ? ` (in: ${el.context})` : '';
+                lines.push(`${num}. Clicked: "${desc}"${tag}${ctx}`);
+                break;
+            }
+            case 'type': {
+                const el = a.element || {};
+                const target = el.placeholder
+                    ? `<${el.tag} placeholder="${el.placeholder}">`
+                    : (el.id ? `<${el.tag} id="${el.id}">` : `<${el.tag}>`);
+                const ctx = el.context ? ` (in: ${el.context})` : '';
+                lines.push(`${num}. Typed: "${a.value}" in ${target}${ctx}`);
+                break;
+            }
+            case 'scroll':
+                lines.push(`${num}. Scrolled ${a.direction || 'down'} ~${a.amount || 500}px`);
+                break;
+            case 'navigate':
+                lines.push(`${num}. Navigated to: ${a.url}`);
+                break;
+            default:
+                lines.push(`${num}. ${a.action}: ${JSON.stringify(a)}`);
+        }
+    });
+
+    lines.push('Follow this demonstration to complete the task.');
+    return lines.join('\n');
+}
+
+function buildMessages(command, domContext, history, demonstrationContext = null) {
     const dom = truncateContext(domContext);
+    const demoText = demonstrationContext ? formatDemonstration(demonstrationContext) : '';
     const messages = [];
 
     if (history.length === 0) {
-        messages.push({
-            role: 'user',
-            content: `Command: ${command}\n\nPage elements:\n${dom}`
-        });
+        let content = '';
+        if (demoText) content += demoText + '\n\n';
+        content += `Command: ${command}\n\nPage elements:\n${dom}`;
+        messages.push({role: 'user', content});
         return messages;
     }
 
     // First turn: original command (no DOM — it's stale by now)
+    let firstContent = '';
+    if (demoText) firstContent += demoText + '\n\n';
+    firstContent += `Command: ${command}`;
     messages.push({
         role: 'user',
-        content: `Command: ${command}`
+        content: firstContent
     });
 
     // Only keep last 3 history entries to limit tokens
@@ -100,9 +146,9 @@ function buildMessages(command, domContext, history) {
     return messages;
 }
 
-async function callAnthropic(config, command, domContext, history, signal) {
+async function callAnthropic(config, command, domContext, history, signal, demonstrationContext) {
     const url = `${config.llmBaseUrl}/v1/messages`;
-    const messages = buildMessages(command, domContext, history);
+    const messages = buildMessages(command, domContext, history, demonstrationContext);
 
     const response = await fetch(url, {
         method: 'POST',
@@ -129,14 +175,14 @@ async function callAnthropic(config, command, domContext, history, signal) {
     return data.content[0].text;
 }
 
-async function callOpenAICompatible(config, command, domContext, history, signal) {
+async function callOpenAICompatible(config, command, domContext, history, signal, demonstrationContext) {
     const url = `${config.llmBaseUrl}/v1/chat/completions`;
     const headers = {'Content-Type': 'application/json'};
     if (config.llmApiKey) {
         headers['Authorization'] = `Bearer ${config.llmApiKey}`;
     }
 
-    const userMessages = buildMessages(command, domContext, history);
+    const userMessages = buildMessages(command, domContext, history, demonstrationContext);
 
     const response = await fetch(url, {
         method: 'POST',
@@ -167,12 +213,12 @@ async function callOpenAICompatible(config, command, domContext, history, signal
     return text;
 }
 
-export async function callLLM(config, command, domContext, history = [], signal) {
+export async function callLLM(config, command, domContext, history = [], signal, demonstrationContext = null) {
     if (config.llmProvider === 'anthropic') {
-        const text = await callAnthropic(config, command, domContext, history, signal);
+        const text = await callAnthropic(config, command, domContext, history, signal, demonstrationContext);
         return parseActionResponse(text);
     }
-    const text = await callOpenAICompatible(config, command, domContext, history, signal);
+    const text = await callOpenAICompatible(config, command, domContext, history, signal, demonstrationContext);
     return parseActionResponse(text);
 }
 

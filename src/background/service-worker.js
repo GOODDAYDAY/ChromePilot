@@ -22,6 +22,7 @@ const NAV_WAIT_MS = 3000;
 
 let taskCancelled = false;
 let currentAbortController = null;
+let recordingTabId = null;
 
 chrome.runtime.onInstalled.addListener(async (details) => {
     if (details.reason === 'install') {
@@ -45,7 +46,7 @@ chrome.action.onClicked.addListener(async (tab) => {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'EXECUTE_COMMAND') {
-        handleExecuteCommand(message.command)
+        handleExecuteCommand(message.command, message.demonstrationContext)
             .then(sendResponse)
             .catch((error) => {
                 console.error('[ChromePilot] EXECUTE_COMMAND error:', error);
@@ -66,6 +67,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
         }).catch(() => {
         });
+        // Stop recording if active
+        if (recordingTabId) {
+            chrome.tabs.sendMessage(recordingTabId, {type: 'STOP_RECORDING'}).catch(() => {
+            });
+            recordingTabId = null;
+        }
         sendResponse({success: true});
         return false;
     }
@@ -98,6 +105,59 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             .catch((error) => {
                 sendResponse({success: false, error: error.message});
             });
+        return true;
+    }
+
+    // --- Recording (Teach Mode) ---
+
+    if (message.type === 'START_RECORDING') {
+        getActiveTabId().then(async (tabId) => {
+            await ensureContentScripts(tabId);
+            const response = await chrome.tabs.sendMessage(tabId, {type: 'START_RECORDING'});
+            if (response?.success) {
+                recordingTabId = tabId;
+            }
+            sendResponse(response || {success: false});
+        }).catch(e => sendResponse({success: false, error: e.message}));
+        return true;
+    }
+
+    if (message.type === 'STOP_RECORDING') {
+        if (!recordingTabId) {
+            sendResponse({success: false, reason: 'Not recording'});
+            return false;
+        }
+        chrome.tabs.sendMessage(recordingTabId, {type: 'STOP_RECORDING'}, (response) => {
+            recordingTabId = null;
+            sendResponse(response || {success: false});
+        });
+        return true;
+    }
+
+    if (message.type === 'RECORD_ACTION') {
+        sendToPanel({type: 'RECORD_ACTION', action: message.action});
+        sendResponse({success: true});
+        return false;
+    }
+
+    if (message.type === 'SAVE_RECORDING') {
+        handleSaveRecording(message.recording)
+            .then(sendResponse)
+            .catch(e => sendResponse({success: false, error: e.message}));
+        return true;
+    }
+
+    if (message.type === 'GET_RECORDINGS') {
+        chrome.storage.local.get('recordings', (data) => {
+            sendResponse({success: true, recordings: data.recordings || []});
+        });
+        return true;
+    }
+
+    if (message.type === 'DELETE_RECORDING') {
+        handleDeleteRecording(message.index)
+            .then(sendResponse)
+            .catch(e => sendResponse({success: false, error: e.message}));
         return true;
     }
 });
@@ -162,6 +222,7 @@ async function ensureContentScripts(tabId) {
                 files: [
                     'lib/utils.js',
                     'content/dom-extractor.js',
+                    'content/action-recorder.js',
                     'content/action-executor.js',
                     'content/content-script.js'
                 ]
@@ -213,7 +274,29 @@ async function handleNavigateAction(action, tabId) {
     };
 }
 
-async function handleExecuteCommand(command) {
+async function handleSaveRecording(recording) {
+    const data = await chrome.storage.local.get('recordings');
+    const recordings = data.recordings || [];
+    recordings.unshift(recording);
+    if (recordings.length > 50) {
+        recordings.length = 50;
+    }
+    await chrome.storage.local.set({recordings});
+    return {success: true};
+}
+
+async function handleDeleteRecording(index) {
+    const data = await chrome.storage.local.get('recordings');
+    const recordings = data.recordings || [];
+    if (index < 0 || index >= recordings.length) {
+        return {success: false, error: 'Invalid index'};
+    }
+    recordings.splice(index, 1);
+    await chrome.storage.local.set({recordings});
+    return {success: true};
+}
+
+async function handleExecuteCommand(command, demonstrationContext = null) {
     taskCancelled = false;
     currentAbortController = new AbortController();
     const signal = currentAbortController.signal;
@@ -258,7 +341,7 @@ async function handleExecuteCommand(command) {
 
         let llmResult;
         try {
-            llmResult = await callLLM(config, command, domResponse.domContext, conversationHistory, signal);
+            llmResult = await callLLM(config, command, domResponse.domContext, conversationHistory, signal, demonstrationContext);
         } catch (error) {
             if (error.name === 'AbortError' || taskCancelled) {
                 await sendToPanel({type: 'COMMAND_RESULT', error: 'Task cancelled by user.'});
