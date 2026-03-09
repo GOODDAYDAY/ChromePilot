@@ -252,10 +252,11 @@ broad `[tabindex]` selector.
 
 2. **`hasInteractiveAncestor(el, primarySet)`** — smart parent-child dedup:
     - If an element's ancestor is already in the interactive set, skip the child
-   - **Exception**: native interactive elements (`a[href]`, `button`, `input`, `textarea`, `select`) are NEVER removed —
-     they are always meaningful
-   - Habitica: `<div role="button">` → inner empty `<div>` → inner `<svg>` = 3→1 (noise removed)
-   - GitHub: container div → child `<button>Star</button>`, `<button>Fork</button>` = all kept (real buttons preserved)
+    - **Exception**: native interactive elements (`a[href]`, `button`, `input`, `textarea`, `select`) are NEVER
+      removed —
+      they are always meaningful
+    - Habitica: `<div role="button">` → inner empty `<div>` → inner `<svg>` = 3→1 (noise removed)
+    - GitHub: container div → child `<button>Star</button>`, `<button>Fork</button>` = all kept (real buttons preserved)
 
 3. **Selector tightening**:
     - `[tabindex]` → `[tabindex="0"]` — only explicitly focusable elements, not `tabindex="-1"` (programmatic focus)
