@@ -461,6 +461,70 @@ body {
     border-color: #fca5a5;
 }
 
+/* --- Preview Card --- */
+
+.preview-card {
+    max-width: 100%;
+    border: 2px solid #ef4444;
+    background: #fff5f5;
+}
+
+.preview-header {
+    font-size: 12px;
+    font-weight: 600;
+    color: #991b1b;
+    margin-bottom: 8px;
+}
+
+.preview-actions-list {
+    font-size: 12px;
+    color: #374151;
+    margin-bottom: 8px;
+}
+
+.preview-action-item {
+    padding: 2px 0;
+}
+
+.preview-warnings {
+    font-size: 11px;
+    color: #d97706;
+    margin-bottom: 8px;
+    font-style: italic;
+}
+
+.preview-btn-row {
+    display: flex;
+    gap: 8px;
+}
+
+.preview-btn {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.preview-btn-confirm {
+    background: #16a34a;
+    color: #fff;
+}
+
+.preview-btn-confirm:hover {
+    background: #15803d;
+}
+
+.preview-btn-reject {
+    background: #f97316;
+    color: #fff;
+}
+
+.preview-btn-reject:hover {
+    background: #ea580c;
+}
+
 .hidden {
     display: none;
 }

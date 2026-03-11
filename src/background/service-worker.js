@@ -13,7 +13,8 @@ const DEFAULT_STORAGE = {
     openInCurrentTab: false,
     maxSteps: 10,
     actionDelay: 500,
-    maxElements: 150
+    maxElements: 150,
+    autoConfirm: false
 };
 
 const DEFAULT_MAX_STEPS = 10;
@@ -23,6 +24,9 @@ const NAV_WAIT_MS = 3000;
 let taskCancelled = false;
 let currentAbortController = null;
 let recordingTabId = null;
+let previewResolve = null;
+
+const MAX_REJECTIONS_PER_STEP = 3;
 
 chrome.runtime.onInstalled.addListener(async (details) => {
     if (details.reason === 'install') {
@@ -55,8 +59,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
+    if (message.type === 'CONFIRM_ACTIONS') {
+        if (previewResolve) {
+            previewResolve({decision: 'confirm'});
+            previewResolve = null;
+        }
+        sendResponse({success: true});
+        return false;
+    }
+
+    if (message.type === 'REJECT_ACTIONS') {
+        if (previewResolve) {
+            previewResolve({decision: 'reject', feedback: message.feedback || ''});
+            previewResolve = null;
+        }
+        sendResponse({success: true});
+        return false;
+    }
+
     if (message.type === 'CANCEL_TASK') {
         taskCancelled = true;
+        if (previewResolve) {
+            previewResolve({decision: 'cancel'});
+            previewResolve = null;
+        }
         if (currentAbortController) {
             currentAbortController.abort();
             currentAbortController = null;
@@ -224,6 +250,7 @@ async function ensureContentScripts(tabId) {
                     'content/dom-extractor.js',
                     'content/action-recorder.js',
                     'content/action-executor.js',
+                    'content/action-previewer.js',
                     'content/content-script.js'
                 ]
             });
@@ -363,20 +390,132 @@ async function handleExecuteCommand(command, demonstrationContext = null) {
             return {success: true, summary};
         }
 
-        // Step C: Execute actions sequentially with delay
+        // Step C: Preview → Confirm → Execute cycle
+        const autoConfirmConfig = await chrome.storage.sync.get('autoConfirm');
+        const autoConfirm = autoConfirmConfig.autoConfirm === true;
+
+        let rejectionCount = 0;
+        let currentActions = llmResult.actions;
+        let confirmed = autoConfirm;
+
+        // Preview-confirm loop (skipped if autoConfirm is on)
+        while (!confirmed) {
+            if (taskCancelled) {
+                await sendToPanel({type: 'COMMAND_RESULT', error: 'Task cancelled by user.'});
+                return {success: false, error: 'Cancelled'};
+            }
+
+            // Show preview overlay on page
+            await sendToPanel({
+                type: 'COMMAND_STATUS',
+                status: `Step ${step}: Previewing ${currentActions.length} action(s)...`
+            });
+
+            const previewResponse = await sendToTab(tabId, {type: 'PREVIEW_ACTIONS', actions: currentActions});
+            const warnings = previewResponse?.warnings || [];
+
+            // Show preview card in side panel
+            await sendToPanel({
+                type: 'ACTION_PREVIEW',
+                actions: currentActions,
+                warnings,
+                step,
+                maxSteps: unlimited ? null : maxSteps
+            });
+
+            // Wait for user decision (returns {decision, feedback?})
+            const result = await new Promise(resolve => {
+                previewResolve = resolve;
+            });
+            previewResolve = null;
+
+            // Remove preview overlay
+            await sendToTab(tabId, {type: 'REMOVE_PREVIEW'}).catch(() => {
+            });
+
+            if (result.decision === 'confirm') {
+                confirmed = true;
+            } else if (result.decision === 'cancel' || taskCancelled) {
+                await sendToPanel({type: 'COMMAND_RESULT', error: 'Task cancelled by user.'});
+                return {success: false, error: 'Cancelled'};
+            } else if (result.decision === 'reject') {
+                rejectionCount++;
+                if (rejectionCount >= MAX_REJECTIONS_PER_STEP) {
+                    await sendToPanel({
+                        type: 'COMMAND_RESULT',
+                        error: `Reached maximum of ${MAX_REJECTIONS_PER_STEP} re-analysis attempts. Please rephrase your command.`
+                    });
+                    return {success: false, error: 'Max rejections reached'};
+                }
+
+                // Build rejection message with optional user feedback
+                const userFeedback = result.feedback
+                    ? `User REJECTED the planned actions. User feedback: "${result.feedback}". Please re-analyze and suggest different actions.`
+                    : 'User REJECTED the planned actions. Please suggest different actions.';
+
+                // Append rejected plan to conversation history
+                conversationHistory.push({
+                    actions: currentActions,
+                    results: [{success: false, message: userFeedback}],
+                    rejected: true,
+                    feedback: result.feedback || ''
+                });
+
+                // Re-extract DOM and re-call LLM
+                await sendToPanel({
+                    type: 'COMMAND_STATUS',
+                    status: `Step ${step}: Re-analyzing (attempt ${rejectionCount + 1})...`
+                });
+
+                const reDomResponse = await sendToTab(tabId, {
+                    type: 'EXTRACT_DOM',
+                    maxElements: elemConfig.maxElements || 150
+                });
+                if (!reDomResponse?.success || !reDomResponse.domContext) {
+                    await sendToPanel({type: 'COMMAND_RESULT', error: 'Failed to extract page elements'});
+                    return {success: false, error: 'Failed to extract page elements'};
+                }
+
+                try {
+                    const reLlmResult = await callLLM(config, command, reDomResponse.domContext, conversationHistory, signal, demonstrationContext);
+                    if (reLlmResult.error) {
+                        await sendToPanel({type: 'COMMAND_RESULT', error: reLlmResult.error});
+                        return {success: false, error: reLlmResult.error};
+                    }
+                    if (!reLlmResult.actions || reLlmResult.actions.length === 0) {
+                        const summary = reLlmResult.summary || 'Task complete (no more actions).';
+                        await sendToPanel({type: 'COMMAND_RESULT', summary});
+                        return {success: true, summary};
+                    }
+                    currentActions = reLlmResult.actions;
+                    // Update llmResult.done for later check
+                    llmResult.done = reLlmResult.done;
+                    llmResult.summary = reLlmResult.summary;
+                } catch (error) {
+                    if (error.name === 'AbortError' || taskCancelled) {
+                        await sendToPanel({type: 'COMMAND_RESULT', error: 'Task cancelled by user.'});
+                        return {success: false, error: 'Cancelled'};
+                    }
+                    await sendToPanel({type: 'COMMAND_RESULT', error: `LLM error: ${error.message}`});
+                    return {success: false, error: error.message};
+                }
+            }
+        }
+
+        // Execute confirmed actions
         await sendToPanel({
             type: 'COMMAND_STATUS',
-            status: `Step ${step}: Executing ${llmResult.actions.length} action(s)...`
+            status: `Step ${step}: Executing ${currentActions.length} action(s)...`
         });
 
         const delayConfig = await chrome.storage.sync.get('actionDelay');
         const actionDelay = (delayConfig.actionDelay !== undefined) ? delayConfig.actionDelay : 500;
 
         const results = [];
-        for (let i = 0; i < llmResult.actions.length; i++) {
+        for (let i = 0; i < currentActions.length; i++) {
             if (taskCancelled) break;
 
-            const action = llmResult.actions[i];
+            const action = currentActions[i];
 
             // Delay between actions (not before the first one)
             if (i > 0) {
@@ -407,7 +546,7 @@ async function handleExecuteCommand(command, demonstrationContext = null) {
 
         // Record this step in conversation history
         conversationHistory.push({
-            actions: llmResult.actions,
+            actions: currentActions,
             results
         });
 

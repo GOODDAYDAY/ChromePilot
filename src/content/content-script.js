@@ -32,9 +32,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
             break;
 
+        case 'PREVIEW_ACTIONS':
+            sendResponse(showActionPreview(message.actions));
+            break;
+
+        case 'REMOVE_PREVIEW':
+            removeActionPreview();
+            sendResponse({success: true});
+            break;
+
         case 'CANCEL_ACTIONS':
             cancelActions();
             removeDebugOverlay();
+            removeActionPreview();
             sendResponse({success: true});
             break;
 

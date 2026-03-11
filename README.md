@@ -30,6 +30,10 @@ want in plain English or Chinese.
 - **Multi-provider LLM Support** — Works with OpenAI, Anthropic Claude, GitHub Copilot, Ollama (local), or any
   OpenAI-compatible API
 - **Configurable Execution** — Adjust action delay, max steps, and open-in-new-tab behavior from the panel header
+- **Dialog Awareness** — Automatically detects and prioritizes popups, modals, and dialogs
+- **Teach Mode** — Record your actions to demonstrate workflows, then replay them with AI assistance
+- **Action Preview & Confirm** — Review planned actions with visual highlights before execution; provide feedback to
+  re-analyze
 
 ## Demo
 
@@ -62,6 +66,18 @@ want in plain English or Chinese.
 > Use the 👁 button to visualize all detected interactive elements with their index numbers.
 
 ![Debug overlay demo](docs/images/5.%20click%20button%2054.gif)
+
+### Action Preview & Confirm — Review Before Execution
+
+> Actions are highlighted with numbered labels. Confirm to execute, or type feedback and re-analyze.
+
+![Action preview demo](docs/images/6.%20show%20batch%20actions%20with%20confirm%20first.gif)
+
+### Auto-run Mode — Skip Confirmation
+
+> Toggle "Auto-run" to execute actions immediately without preview.
+
+![Auto-run demo](docs/images/7.%20show%20the%20auto-run.gif)
 
 ## Installation
 
@@ -103,7 +119,8 @@ The side panel header provides quick settings:
 
 | Setting      | Options                      | Default | Description                                         |
 |--------------|------------------------------|---------|-----------------------------------------------------|
-| 当前页跳转        | On/Off                       | Off     | Navigate in current tab instead of opening new tabs |
+| Same tab     | On/Off                       | Off     | Navigate in current tab instead of opening new tabs |
+| Auto-run     | On/Off                       | Off     | Skip action preview, execute immediately            |
 | Max Steps    | 5 / 10 / 20 / 50 / Unlimited | 10      | Maximum LLM rounds per command                      |
 | Action Delay | 0s – 5s                      | 0.5s    | Delay between each action execution                 |
 
@@ -128,7 +145,9 @@ src/
 ├── content/
 │   ├── content-script.js      # Message handler on web pages
 │   ├── dom-extractor.js       # Extracts interactive elements
-│   └── action-executor.js     # Simulates click/type/scroll/read
+│   ├── action-executor.js     # Simulates click/type/scroll/read
+│   ├── action-previewer.js    # Preview overlay (red borders + step labels)
+│   └── action-recorder.js     # Teach mode action recording
 ├── sidepanel/
 │   ├── sidepanel.html         # Chat UI (Chrome Side Panel API)
 │   ├── sidepanel.js           # Panel logic & settings
@@ -144,8 +163,10 @@ src/
 2. Service worker extracts interactive elements from the active tab
 3. Elements + command are sent to the configured LLM
 4. LLM returns a list of actions (click, type, scroll, navigate, read)
-5. Actions are executed sequentially on the page
-6. If the task isn't done (`done: false`), repeat from step 2
+5. Actions are previewed with red highlights and step labels (unless Auto-run is on)
+6. User confirms or provides feedback to re-analyze
+7. Confirmed actions are executed sequentially on the page
+8. If the task isn't done (`done: false`), repeat from step 2
 
 ## Requirements
 

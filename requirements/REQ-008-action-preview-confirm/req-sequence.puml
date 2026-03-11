@@ -1,0 +1,51 @@
+@startuml
+title REQ-008 Action Preview & Confirm - Sequence
+
+participant "Side Panel" as SP
+participant "Service Worker" as SW
+participant "Content Script" as CS
+participant "LLM API" as LLM
+
+SP -> SW: EXECUTE_COMMAND(command)
+SW -> CS: EXTRACT_DOM
+CS --> SW: domContext
+
+SW -> LLM: callLLM(command, domContext)
+LLM --> SW: actions[]
+
+alt Auto-confirm enabled
+  SW -> CS: PERFORM_ACTIONS(actions)
+  CS --> SW: results
+  SW -> SP: COMMAND_RESULT
+else Preview mode (default)
+  SW -> CS: PREVIEW_ACTIONS(actions)
+  CS --> CS: Show red borders\n+ step number labels
+  SW -> SP: ACTION_PREVIEW(actions summary)
+  SP --> SP: Show Confirm / Re-analyze buttons
+
+  alt User confirms
+    SP -> SW: CONFIRM_ACTIONS
+    SW -> CS: REMOVE_PREVIEW
+    SW -> CS: PERFORM_ACTIONS(actions)
+    CS --> SW: results
+    SW -> SP: STEP_COMPLETE / COMMAND_RESULT
+
+  else User re-analyzes
+    SP -> SW: REJECT_ACTIONS
+    SW -> CS: REMOVE_PREVIEW
+    SW -> SW: Append rejected plan\nto conversationHistory
+    SW -> CS: EXTRACT_DOM
+    CS --> SW: domContext (refreshed)
+    SW -> LLM: callLLM(command, domContext,\nhistory with rejection)
+    LLM --> SW: new actions[]
+    SW -> CS: PREVIEW_ACTIONS(new actions)
+    SW -> SP: ACTION_PREVIEW(new summary)
+
+  else User cancels
+    SP -> SW: STOP_TASK
+    SW -> CS: REMOVE_PREVIEW
+    SW -> SP: COMMAND_RESULT(cancelled)
+  end
+end
+
+@enduml

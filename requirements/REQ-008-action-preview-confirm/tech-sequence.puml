@@ -1,0 +1,66 @@
+@startuml
+title REQ-008 Sequence - Preview, Confirm, and Re-analyze
+
+participant "Side Panel" as SP
+participant "Service Worker" as SW
+participant "Content Script" as CS
+participant "LLM API" as LLM
+
+== Step N: Extract & Analyze ==
+
+SW -> CS: EXTRACT_DOM
+CS --> SW: domContext
+SW -> LLM: callLLM(command, domContext, history)
+LLM --> SW: actions[]
+
+SW -> SW: Read autoConfirm from storage
+
+alt autoConfirm = true
+  SW -> CS: PERFORM_ACTIONS(actions)
+  CS --> SW: results
+else autoConfirm = false (default)
+
+  == Preview Phase ==
+
+  SW -> CS: PREVIEW_ACTIONS(actions)
+  CS --> SW: {success, warnings[]}
+  SW -> SP: ACTION_PREVIEW(actions, warnings, step)
+  SP --> SP: Show preview card\nwith Confirm / Re-analyze
+
+  SW -> SW: await user decision\n(Promise)
+
+  alt User clicks Confirm
+    SP -> SW: CONFIRM_ACTIONS
+    SW -> CS: REMOVE_PREVIEW
+    SW -> CS: PERFORM_ACTIONS(actions)
+    CS --> SW: results
+
+  else User clicks Re-analyze (max 3 times)
+    SP -> SW: REJECT_ACTIONS
+    SW -> CS: REMOVE_PREVIEW
+    SW -> SW: rejectionCount++\nAppend {rejected, actions}\nto conversationHistory
+
+    SW -> CS: EXTRACT_DOM
+    CS --> SW: domContext (refreshed)
+    SW -> LLM: callLLM(command, domContext, updatedHistory)
+    LLM --> SW: new actions[]
+
+    note right: Loop back to\nPreview Phase
+
+  else User clicks Stop
+    SP -> SW: CANCEL_TASK
+    SW -> CS: REMOVE_PREVIEW
+    SW -> SP: COMMAND_RESULT(cancelled)
+  end
+end
+
+== Check if done ==
+
+alt done = true
+  SW -> SP: COMMAND_RESULT(summary)
+else done = false
+  SW -> SP: STEP_COMPLETE(step, results)
+  note right: Continue to Step N+1\nwith new preview cycle
+end
+
+@enduml

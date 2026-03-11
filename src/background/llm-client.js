@@ -127,14 +127,24 @@ function buildMessages(command, domContext, history, demonstrationContext = null
             role: 'assistant',
             content: JSON.stringify({actions: compactActions, done: false})
         });
-        // Results (compact)
-        const resultSummary = entry.results.map(r =>
-            `${r.success ? 'OK' : 'FAIL'}: ${r.message}`
-        ).join('\n');
-        messages.push({
-            role: 'user',
-            content: `Results:\n${resultSummary}`
-        });
+        // Results (compact) — rejected plans get special formatting
+        if (entry.rejected) {
+            const rejectionMsg = entry.feedback
+                ? `User REJECTED the planned actions. User feedback: "${entry.feedback}". Please re-analyze and suggest different actions.`
+                : 'User REJECTED the planned actions. Please suggest different actions.';
+            messages.push({
+                role: 'user',
+                content: rejectionMsg
+            });
+        } else {
+            const resultSummary = entry.results.map(r =>
+                `${r.success ? 'OK' : 'FAIL'}: ${r.message}`
+            ).join('\n');
+            messages.push({
+                role: 'user',
+                content: `Results:\n${resultSummary}`
+            });
+        }
     }
 
     // Final user message: current DOM for this step

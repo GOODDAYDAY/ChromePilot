@@ -1,0 +1,46 @@
+@startuml
+title REQ-008 Architecture - Preview & Confirm
+
+package "Background" {
+  [Service Worker] as SW
+  [LLM Client] as LLM
+}
+
+package "Content Scripts" {
+  [content-script.js\n(message router)] as CS
+  [dom-extractor.js\n(elementMap)] as DE
+  [action-executor.js\n(execute actions)] as AE
+  [action-previewer.js\n(NEW: preview overlay)] as AP
+}
+
+package "Side Panel" {
+  [sidepanel.js\n(preview card UI)] as SP
+}
+
+package "Options Page" {
+  [options.js\n(autoConfirm toggle)] as OP
+}
+
+database "chrome.storage.sync" as Storage
+
+SW --> LLM : callLLM()
+SW --> CS : PREVIEW_ACTIONS\nREMOVE_PREVIEW\nPERFORM_ACTIONS
+SW --> SP : ACTION_PREVIEW\nCOMMAND_STATUS
+SP --> SW : CONFIRM_ACTIONS\nREJECT_ACTIONS\nCANCEL_TASK
+
+CS --> DE : extractInteractiveElements()
+CS --> AE : executeActions()
+CS --> AP : showActionPreview()\nremoveActionPreview()
+AP --> DE : getElementByIndex()\nelementMap
+
+OP --> Storage : autoConfirm
+SW --> Storage : read autoConfirm
+
+note right of AP
+  NEW module
+  Reuses elementMap from DE
+  Reuses red border style from AE
+  Reuses RAF scroll pattern from DE
+end note
+
+@enduml

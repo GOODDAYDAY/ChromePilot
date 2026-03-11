@@ -17,12 +17,15 @@ const recordingsPanel = document.getElementById('recordingsPanel');
 const recordingsList = document.getElementById('recordingsList');
 const closeRecordingsBtn = document.getElementById('closeRecordingsBtn');
 const openInCurrentTabEl = document.getElementById('openInCurrentTab');
+const autoConfirmEl = document.getElementById('autoConfirm');
 const maxStepsEl = document.getElementById('maxSteps');
 const actionDelayEl = document.getElementById('actionDelay');
 
 let statusMsgEl = null;
 let running = false;
 let recording = false;
+let previewing = false;
+let previewCardEl = null;
 let currentDemonstration = null;
 
 // --- Init ---
@@ -30,8 +33,9 @@ let currentDemonstration = null;
 async function init() {
     // Load settings
     try {
-        const data = await chrome.storage.sync.get(['openInCurrentTab', 'maxSteps', 'actionDelay']);
+        const data = await chrome.storage.sync.get(['openInCurrentTab', 'autoConfirm', 'maxSteps', 'actionDelay']);
         openInCurrentTabEl.checked = !!data.openInCurrentTab;
+        autoConfirmEl.checked = !!data.autoConfirm;
         if (data.maxSteps !== undefined) {
             maxStepsEl.value = String(data.maxSteps);
         }
@@ -46,6 +50,13 @@ async function init() {
     openInCurrentTabEl.addEventListener('change', async () => {
         try {
             await chrome.storage.sync.set({openInCurrentTab: openInCurrentTabEl.checked});
+        } catch (e) {
+            console.error('[ChromePilot] Failed to save settings:', e);
+        }
+    });
+    autoConfirmEl.addEventListener('change', async () => {
+        try {
+            await chrome.storage.sync.set({autoConfirm: autoConfirmEl.checked});
         } catch (e) {
             console.error('[ChromePilot] Failed to save settings:', e);
         }
@@ -184,11 +195,16 @@ async function init() {
                 removeStatusMessage();
                 showStepResult(message.step, message.maxSteps, message.results);
                 break;
+            case 'ACTION_PREVIEW':
+                removeStatusMessage();
+                showPreviewCard(message.actions, message.warnings, message.step, message.maxSteps);
+                break;
             case 'RECORD_ACTION':
                 showRecordActionLive(message.action);
                 break;
             case 'COMMAND_RESULT':
                 removeStatusMessage();
+                removePreviewCard();
                 if (message.error) {
                     addMessage('error', message.error);
                 } else if (message.results) {
@@ -345,22 +361,135 @@ async function handleStop() {
     }
 }
 
+// --- Preview Card ---
+
+function showPreviewCard(actions, warnings, step, maxSteps) {
+    removePreviewCard();
+    previewing = true;
+    hideWelcome();
+
+    // Enable input field so user can type feedback for re-analysis
+    inputEl.disabled = false;
+    inputEl.placeholder = 'Type feedback for re-analysis, or just click Confirm...';
+
+    const card = document.createElement('div');
+    card.className = 'message ai preview-card';
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'preview-header';
+    header.textContent = maxSteps
+        ? `Step ${step}/${maxSteps} — Planned Actions`
+        : step > 1
+            ? `Step ${step} — Planned Actions`
+            : 'Planned Actions';
+    card.appendChild(header);
+
+    // Action list
+    const list = document.createElement('div');
+    list.className = 'preview-actions-list';
+    actions.forEach((action, i) => {
+        const item = document.createElement('div');
+        item.className = 'preview-action-item';
+        item.textContent = `${i + 1}. ${formatActionForDisplay(action)}`;
+        list.appendChild(item);
+    });
+    card.appendChild(list);
+
+    // Warnings
+    if (warnings && warnings.length > 0) {
+        const warningsDiv = document.createElement('div');
+        warningsDiv.className = 'preview-warnings';
+        for (const w of warnings) {
+            const wLine = document.createElement('div');
+            wLine.textContent = w;
+            warningsDiv.appendChild(wLine);
+        }
+        card.appendChild(warningsDiv);
+    }
+
+    // Buttons
+    const btnRow = document.createElement('div');
+    btnRow.className = 'preview-btn-row';
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'preview-btn preview-btn-confirm';
+    confirmBtn.textContent = '\u25B6 Confirm';
+    confirmBtn.addEventListener('click', async () => {
+        removePreviewCard();
+        try {
+            await chrome.runtime.sendMessage({type: 'CONFIRM_ACTIONS'});
+        } catch (e) {
+            console.error('[ChromePilot] Failed to confirm actions:', e);
+        }
+    });
+
+    const rejectBtn = document.createElement('button');
+    rejectBtn.className = 'preview-btn preview-btn-reject';
+    rejectBtn.textContent = '\uD83D\uDD04 Re-analyze';
+    rejectBtn.addEventListener('click', async () => {
+        // Grab user feedback from input field
+        const feedback = inputEl.value.trim();
+        inputEl.value = '';
+        inputEl.style.height = 'auto';
+        if (feedback) {
+            addMessage('user', feedback);
+        }
+        removePreviewCard();
+        try {
+            await chrome.runtime.sendMessage({type: 'REJECT_ACTIONS', feedback});
+        } catch (e) {
+            console.error('[ChromePilot] Failed to reject actions:', e);
+        }
+    });
+
+    btnRow.appendChild(confirmBtn);
+    btnRow.appendChild(rejectBtn);
+    card.appendChild(btnRow);
+
+    messagesEl.appendChild(card);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    previewCardEl = card;
+}
+
+function removePreviewCard() {
+    if (previewCardEl && previewCardEl.parentNode) {
+        previewCardEl.remove();
+        previewCardEl = null;
+    }
+    previewing = false;
+    inputEl.placeholder = 'Type a command...';
+}
+
 // --- Teach Mode helpers ---
 
 function formatActionForDisplay(action) {
+    // Support both LLM actions (index + description) and teach mode recordings (element object)
+    if (action.description) {
+        return action.description;
+    }
     switch (action.action) {
         case 'click': {
+            if (action.index != null) return `Click element [${action.index}]`;
             const el = action.element || {};
             return `Click "${el.text || el.ariaLabel || el.id || el.tag || 'element'}"`;
         }
         case 'type': {
+            const value = action.value ? `"${action.value}"` : '';
+            if (action.index != null) return `Type ${value} in element [${action.index}]`;
             const el = action.element || {};
-            return `Type "${action.value}" in ${el.placeholder || el.id || el.tag || 'input'}`;
+            return `Type ${value} in ${el.placeholder || el.id || el.tag || 'input'}`;
         }
         case 'scroll':
-            return `Scroll ${action.direction || 'down'} ~${action.amount || 0}px`;
+            return `Scroll ${action.direction || 'down'} ~${action.amount || 500}px`;
         case 'navigate':
             return `Navigate to ${action.url}`;
+        case 'read':
+            return action.index != null ? `Read element [${action.index}]` : 'Read';
+        case 'repeat':
+            return action.index != null
+                ? `Click element [${action.index}] x${action.times || 1}`
+                : `Repeat x${action.times || 1}`;
         default:
             return action.action;
     }

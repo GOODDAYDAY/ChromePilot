@@ -26,6 +26,7 @@
         "content/dom-extractor.js",
         "content/action-recorder.js",
         "content/action-executor.js",
+        "content/action-previewer.js",
         "content/content-script.js"
       ],
       "run_at": "document_idle"

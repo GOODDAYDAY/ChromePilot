@@ -1,0 +1,56 @@
+@startuml
+title REQ-008 Action Preview & Confirm - Flow
+
+start
+
+:User issues command;
+:Extract DOM elements;
+:Call LLM for action plan;
+
+if (Auto-confirm enabled?) then (yes)
+  :Execute actions immediately;
+else (no)
+  :Show preview overlay\n(red borders + step numbers);
+  :Show action summary in side panel\nwith Confirm / Re-analyze buttons;
+
+  repeat
+    if (User choice?) then (Confirm)
+      :Remove preview overlay;
+      :Execute actions;
+    elseif (Stop) then
+      :Remove preview overlay;
+      :Cancel task;
+      stop
+    else (Re-analyze)
+      :Remove preview overlay;
+      :Increment rejection counter;
+
+      if (Rejections >= 3?) then (yes)
+        :Show "please rephrase" message;
+        stop
+      else (no)
+        :Append rejected plan\nto conversation history;
+        :Re-extract DOM;
+        :Call LLM with\nrejection context;
+        :Show new preview overlay;
+      endif
+    endif
+  repeat while (Re-analyze chosen?) is (yes)
+endif
+
+if (Task done?) then (yes)
+  :Show final summary;
+  stop
+else (no)
+  :Proceed to next step;
+  note right
+    Each step repeats the
+    full preview-confirm cycle
+  end note
+  :Extract DOM for next step;
+  :Call LLM for next step;
+  backward :Show preview for next step;
+endif
+
+stop
+@enduml

@@ -1,0 +1,31 @@
+@startuml
+title REQ-008 Action Preview & Confirm - Use Cases
+
+actor User
+
+rectangle "ChromePilot" {
+  usecase "Issue Command" as UC1
+  usecase "View Action Preview" as UC2
+  usecase "Confirm Execution" as UC3
+  usecase "Reject & Re-analyze" as UC4
+  usecase "Cancel Task" as UC5
+  usecase "Toggle Auto-Confirm" as UC6
+}
+
+User --> UC1
+User --> UC2
+User --> UC3
+User --> UC4
+User --> UC5
+User --> UC6
+
+UC1 ..> UC2 : <<include>>
+UC2 ..> UC3 : <<extend>>
+UC2 ..> UC4 : <<extend>>
+UC4 ..> UC2 : triggers new preview
+
+note right of UC6
+  When enabled, UC2/UC3/UC4
+  are skipped entirely
+end note
+@enduml
